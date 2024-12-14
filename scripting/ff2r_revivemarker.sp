@@ -183,18 +183,22 @@ public Action Event_OnPlayerDeath(Handle event, const char[] name, bool dontBroa
 }
 
 public void FF2R_OnBossRemoved(int clientIdx) {
-	MarkerEnable = false;
-	for(int client = 1; client <= MaxClients; client++) {
-		if(!IsValidClient(client))
-			continue;
+	BossData cfg = FF2R_GetBossData(clientIdx);
+	AbilityData ability = cfg.GetAbility("special_revivemarker");
+	if (ability.IsMyPlugin()) {
+		MarkerEnable = false;
+		for(int client = 1; client <= MaxClients; client++) {
+			if(!IsValidClient(client))
+				continue;
 
-		currentTeam[client] = 0;
-		ChangeClass[client] = false;
-		reviveLimit[client] = 0;
+			currentTeam[client] = 0;
+			ChangeClass[client] = false;
+			reviveLimit[client] = 0;
+		}
+		UnhookEvent("player_death", Event_OnPlayerDeath, EventHookMode_PostNoCopy);
+		UnhookEvent("player_spawn", Event_OnPlayerSpawn, EventHookMode_Pre);
+		RemoveCondition(clientIdx, buffer);
 	}
-	UnhookEvent("player_death", Event_OnPlayerDeath, EventHookMode_PostNoCopy);
-	UnhookEvent("player_spawn", Event_OnPlayerSpawn, EventHookMode_Pre);
-	RemoveCondition(clientIdx, buffer);
 }
 
 stock void DropReanimator(int client) // Drops a revive marker
