@@ -5,6 +5,7 @@
 		"range"     ""      // (float)	Range
 		"damage"    ""      // (int)	Damage
 
+		"stun"    ""	// (bool)	true = boss stay stun, false = no stun
 		"move"		""		// (bool)	true = boss move freely , false = cannot
 		"plugin_name"	"ff2r_shadow93_humansentrybuster"
 	}
