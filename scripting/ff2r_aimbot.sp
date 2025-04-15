@@ -21,7 +21,7 @@ float            duration[MAXPLAYERS + 1];  // Time of aimbot
 public Plugin myinfo =
 {
   name        = "[FF2R] AimBot",
-  author      = "Deatharus Fix by Zell",
+  author      = "Deatharus, Zell",
   description = "MLG SNIPER",
   version     = "1.0.1",
 };
