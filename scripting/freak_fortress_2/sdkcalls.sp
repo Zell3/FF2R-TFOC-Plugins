@@ -1,13 +1,3 @@
-/*
-	void SDKCall_Setup()
-	void SDKCall_EquipWearable(int client, int entity)
-	int SDKCall_GetMaxHealth(int client)
-	void SDKCall_IncrementStat(int client, TFStatType_t stat, int amount)
-	bool SDKCall_CheckBlockBackstab(int client, int attacker)
-	void SDKCall_SetSpeed(int client)
-	void SDKCall_ChangeClientTeam(int client, int newTeam)
-*/
-
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -20,7 +10,9 @@ static Handle SDKTeamAddPlayer;
 static Handle SDKTeamRemovePlayer;
 static Handle SDKIncrementStat;
 static Handle SDKCheckBlockBackstab;
+static Handle SDKGetMaxAmmo;
 static Handle SDKSetSpeed;
+static Handle SDKDropSingleInstance;
 
 void SDKCall_Setup()
 {
@@ -101,10 +93,29 @@ void SDKCall_Setup()
 		LogError("[Gamedata] Could not find CTFPlayer::CheckBlockBackstab");
 	
 	StartPrepSDKCall(SDKCall_Entity);
+	PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "CTFPlayer::GetMaxAmmo");
+	PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+	PrepSDKCall_AddParameter(SDKType_PlainOldData, SDKPass_Plain);
+	PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_ByValue);
+	SDKGetMaxAmmo = EndPrepSDKCall();
+	if(!SDKGetMaxAmmo)
+		LogError("[Gamedata] Could not find CTFPlayer::GetMaxAmmo");
+
+	StartPrepSDKCall(SDKCall_Entity);
 	PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "CTFPlayer::TeamFortress_SetSpeed");
 	SDKSetSpeed = EndPrepSDKCall();
 	if(!SDKSetSpeed)
 		LogError("[Gamedata] Could not find CTFPlayer::TeamFortress_SetSpeed");
+	
+	StartPrepSDKCall(SDKCall_Entity);
+	PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "CTFPowerup::DropSingleInstance");
+	PrepSDKCall_AddParameter(SDKType_Vector, SDKPass_ByRef);
+	PrepSDKCall_AddParameter(SDKType_CBaseEntity, SDKPass_Pointer);
+	PrepSDKCall_AddParameter(SDKType_Float, SDKPass_ByValue);
+	PrepSDKCall_AddParameter(SDKType_Float, SDKPass_ByValue);
+	SDKDropSingleInstance = EndPrepSDKCall();
+	if(!SDKDropSingleInstance)
+		LogError("[Gamedata] Could not find CTFPowerup::DropSingleInstance");
 	
 	delete gamedata;
 }
@@ -134,11 +145,14 @@ void SDKCall_FinishLagCompensation(int client)
 	if(SDKStartLagCompensation && SDKFinishLagCompensation && SDKGetCurrentCommand != view_as<Address>(-1))
 	{
 		Address value = DHook_GetLagCompensationManager();
-		if(!value)
-			ThrowError("Trying to finish lag compensation before any existed");
-		
-		SDKCall(SDKFinishLagCompensation, value, client);
+		if(value)
+			SDKCall(SDKFinishLagCompensation, value, client);
 	}
+}
+
+int SDKCall_GetMaxAmmo(int client, int type, int class = -1)
+{
+	return SDKGetMaxAmmo ? SDKCall(SDKGetMaxAmmo, client, type, class) : -1;
 }
 
 int SDKCall_GetMaxHealth(int client)
@@ -174,10 +188,8 @@ void SDKCall_StartLagCompensation(int client)
 	if(SDKStartLagCompensation && SDKFinishLagCompensation && SDKGetCurrentCommand != view_as<Address>(-1))
 	{
 		Address value = DHook_GetLagCompensationManager();
-		if(!value)
-			ThrowError("Trying to start lag compensation before any existed");
-		
-		SDKCall(SDKStartLagCompensation, value, client, GetEntityAddress(client) + SDKGetCurrentCommand);
+		if(value)
+			SDKCall(SDKStartLagCompensation, value, client, GetEntityAddress(client) + SDKGetCurrentCommand);
 	}
 }
 
@@ -220,11 +232,17 @@ void SDKCall_ChangeClientTeam(int client, int newTeam)
 	{
 		if(newTeam % 2)
 		{
-			TF2Attrib_RemoveByDefIndex(client, 406);
+			Attrib_Remove(client, "vision opt in flags");
 		}
 		else
 		{
-			TF2Attrib_SetByDefIndex(client, 406, 4.0);
+			Attrib_Set(client, "vision opt in flags", 4.0);
 		}
 	}
+}
+
+void SDKCall_DropSingleInstance(int entity, const float velocity[3], int thrower, float throwerTouchDelay, float resetTime = 0.0)
+{
+	if(SDKDropSingleInstance)
+		SDKCall(SDKDropSingleInstance, entity, velocity, thrower, throwerTouchDelay, resetTime);
 }

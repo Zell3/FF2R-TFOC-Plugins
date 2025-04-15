@@ -1,39 +1,3 @@
-/*
-	void RegFreakCmd(const char[] cmd, ConCmd callback, const char[] description = NULL_STRING, int flags = 0)
-	SectionType GetSectionType(const char[] buffer)
-	int FindClientOfBossIndex(int boss = 0)
-	TFClassType GetClassOfName(const char[] buffer)
-	void GetClassWeaponClassname(TFClassType class, char[] name, int length)
-	int TotalPlayersAlive()
-	int GetKillsOfWeaponRank(int rank = -1, int index = 0)
-	int GetKillsOfCosmeticRank(int rank = -1, int index = 0)
-	void ShowGameText(int client, const char[] icon = "leaderboard_streak", int color = 0, const char[] buffer, any ...)
-	void ApplyAllyHealEvent(int healer, int patient, int amount)
-	void ApplySelfHealEvent(int entindex, int amount)
-	int DamageGoal(int goal, int current, int last)
-	bool TF2_GetItem(int client, int &weapon, int &pos)
-	void TF2_RemoveItem(int client, int weapon)
-	void TF2_RemoveAllItems(int client)
-	bool IsInvuln(int client)
-	bool TF2_IsCritBoosted(int client)
-	int TF2_GetClassnameSlot(const char[] classname, bool econ = false)
-	bool GetControlPoint()
-	void SetControlPoint(bool enable)
-	void SetArenaCapEnableTime(float time)
-	int GetRoundStatus()
-	void ScreenShake(const float pos[3], float amplitude, float frequency, float duration, float radius)
-	void FPrintToChat(int client, const char[] message, any ...)
-	void FPrintToChatEx(int client, int author, const char[] message, any ...)
-	void FPrintToChatAll(const char[] message, any ...)
-	void FReplyToCommand(int client, const char[] message, any ...)
-	void FShowActivity(int client, const char[] message, any ...)
-	void PrintSayText2(int client, int author, bool chat = true, const char[] message, const char[] param1 = NULL_STRING, const char[] param2 = NULL_STRING, const char[] param3 = NULL_STRING, const char[] param4 = NULL_STRING)
-	void Debug(const char[] buffer, any ...)
-	any Min(any value, any min)
-	any Max(any value, any max)
-	any Clamp(any value, any min, any max)
-*/
-
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -70,6 +34,9 @@ SectionType GetSectionType(const char[] buffer)
 	if(StrEqual(buffer, "download"))
 		return Section_Download;
 
+	if(!StrContains(buffer, "filenet"))
+		return Section_FileNet;
+
 	if(!StrContains(buffer, "map_"))
 		return Section_Map;
 
@@ -95,6 +62,24 @@ int FindClientOfBossIndex(int boss = 0)
 	return -1;
 }
 
+bool MultiBosses()
+{
+	bool found;
+
+	for(int client = 1; client <= MaxClients; client++)
+	{
+		if(Client(client).IsBoss)
+		{
+			if(found)
+				return true;
+			
+			found = true;
+		}
+	}
+	
+	return false;
+}
+
 TFClassType GetClassOfName(const char[] buffer)
 {
 	TFClassType class = view_as<TFClassType>(StringToInt(buffer));
@@ -110,15 +95,14 @@ void GetClassWeaponClassname(TFClassType class, char[] name, int length)
 	{ 
 		switch(class)
 		{
-			case TFClass_Scout:	strcopy(name, length, "tf_weapon_bat");
-			case TFClass_Pyro:	strcopy(name, length, "tf_weapon_fireaxe");
-			case TFClass_DemoMan:	strcopy(name, length, "tf_weapon_bottle");
-			case TFClass_Heavy:	strcopy(name, length, "tf_weapon_fists");
-			case TFClass_Engineer:	strcopy(name, length, "tf_weapon_wrench");
-			case TFClass_Medic:	strcopy(name, length, "tf_weapon_bonesaw");
-			case TFClass_Sniper:	strcopy(name, length, "tf_weapon_club");
-			case TFClass_Spy:	strcopy(name, length, "tf_weapon_knife");
-			default:		strcopy(name, length, "tf_weapon_shovel");
+			case TFClass_Scout:			strcopy(name, length, "tf_weapon_bat");
+			case TFClass_Pyro, TFClass_Heavy:	strcopy(name, length, "tf_weapon_fireaxe");
+			case TFClass_DemoMan:			strcopy(name, length, "tf_weapon_bottle");
+			case TFClass_Engineer:			strcopy(name, length, "tf_weapon_wrench");
+			case TFClass_Medic:			strcopy(name, length, "tf_weapon_bonesaw");
+			case TFClass_Sniper:			strcopy(name, length, "tf_weapon_club");
+			case TFClass_Spy:			strcopy(name, length, "tf_weapon_knife");
+			default:				strcopy(name, length, "tf_weapon_shovel");
 		}
 	}
 	else if(StrEqual(name, "tf_weapon_shotgun"))
@@ -138,6 +122,18 @@ int TotalPlayersAlive()
 	int amount = PlayersAlive[TFTeam_Red] + PlayersAlive[TFTeam_Blue];
 	if(Cvar[SpecTeam].BoolValue)
 		amount += PlayersAlive[TFTeam_Unassigned] + PlayersAlive[TFTeam_Spectator];
+	
+	return amount;
+}
+
+int TotalPlayersAliveEnemy(int team)
+{
+	int amount;
+	for(int i = Cvar[SpecTeam].BoolValue ? 0 : 2; i < sizeof(PlayersAlive); i++)
+	{
+		if(i != team)
+			amount += PlayersAlive[i];
+	}
 	
 	return amount;
 }
@@ -650,7 +646,20 @@ void ApplySelfHealEvent(int entindex, int amount)
 
 int DamageGoal(int goal, int current, int last)
 {
+	if(!goal)
+		return 0;
+	
 	return (current / goal) - (last / goal);
+}
+
+void TF2_RefillMaxAmmo(int client)
+{
+	for(int i; i < 4 /* 7 */; i++)
+	{
+		int ammo = SDKCall_GetMaxAmmo(client, i);
+		if(ammo >= 0)
+			SetEntProp(client, Prop_Data, "m_iAmmo", ammo, _, i);
+	}
 }
 
 bool TF2_GetItem(int client, int &weapon, int &pos)
@@ -880,6 +889,32 @@ void ScreenShake(const float pos[3], float amplitude, float frequency, float dur
 		AcceptEntityInput(entity, "AddOutput");
 		AcceptEntityInput(entity, "FireUser1");
 	}
+}
+
+void ImportValuesIntoConfigMap(ConfigMap from, ConfigMap to)
+{
+	StringMapSnapshot snap = from.Snapshot();
+
+	int entries = snap.Length;
+	if(entries)
+	{
+		PackVal val;
+
+		for(int i = 0; i < entries; i++)
+		{
+			int length = snap.KeyBufferSize(i) + 1;
+
+			char[] key = new char[length];
+			snap.GetKey(i, key, length);
+
+			from.GetArray(key, val, sizeof(val));
+
+			if(!val.cfg)
+				to.SetArray(key, val, sizeof(val));
+		}
+	}
+
+	delete snap;
 }
 
 void FPrintToChat(int client, const char[] message, any ...)

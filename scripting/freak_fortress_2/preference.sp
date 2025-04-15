@@ -1,27 +1,3 @@
-/*
-	void Preference_PluginStart()
-	void Preference_ConfigsExecuted()
-	void Preference_MapEnd()
-	void Preference_AddBoss(int client, const char[] name)
-	void Preference_AddDifficulty(int client, const char[] name)
-	bool Preference_ShouldUpdate(int client)
-	bool Preference_GetBoss(int client, int index, char[] buffer, int length)
-	bool Preference_GetDifficulty(int client, int index, char[] buffer, int length)
-	void Preference_ClearArrays(int client)
-	bool Preference_DisabledBoss(int client, int charset)
-	int Preference_PickBoss(int client, int team = -1)
-	void Preference_BossMenu(int client)
-	void Preference_ClientDisconnect(int client)
-	int Preference_IsInParty(int client)
-	void Preference_FinishParty(int client)
-	int Preference_GetCompanion(int client, int special, int team, bool &disband)
-	int Preference_GetFullQueuePoints(int client)
-	int Preference_GetBossQueue(int[] players, int maxsize, bool display, int team = -1)
-	void Preference_ApplyDifficulty(int client, int leader, bool delay)
-	bool Preference_HasDifficulties()
-	void Preference_DifficultyMenu(int client)
-*/
-
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -295,7 +271,7 @@ int Preference_PickBoss(int client, int team = -1)
 	return special;
 }
 
-public Action Preference_BossMenuLegacy(int client, int args)
+static Action Preference_BossMenuLegacy(int client, int args)
 {
 	FReplyToCommand(client, "%t", "Legacy Boss Menu Command");
 	
@@ -309,7 +285,7 @@ public Action Preference_BossMenuLegacy(int client, int args)
 	return Plugin_Handled;
 }
 
-public Action Preference_BossMenuCmd(int client, int args)
+static Action Preference_BossMenuCmd(int client, int args)
 {
 	if(GetCmdReplySource() == SM_REPLY_TO_CONSOLE)
 	{
@@ -700,7 +676,7 @@ static void BossMenu(int client)
 	}
 }
 
-public int Preference_BossMenuH(Menu menu, MenuAction action, int client, int choice)
+static int Preference_BossMenuH(Menu menu, MenuAction action, int client, int choice)
 {
 	switch(action)
 	{
@@ -968,7 +944,7 @@ static void CreateParty(int client)
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int Preference_CreatePartyH(Menu menu, MenuAction action, int client, int choice)
+static int Preference_CreatePartyH(Menu menu, MenuAction action, int client, int choice)
 {
 	switch(action)
 	{
@@ -1055,7 +1031,7 @@ static bool PartyMenu(int client)
 	return true;
 }
 
-public int Preference_PartyMenuH(Menu menu, MenuAction action, int client, int choice)
+static int Preference_PartyMenuH(Menu menu, MenuAction action, int client, int choice)
 {
 	switch(action)
 	{
@@ -1163,7 +1139,7 @@ public int Preference_PartyMenuH(Menu menu, MenuAction action, int client, int c
 	return 0;
 }
 
-public int Preference_PartyInviteH(Menu menu, MenuAction action, int client, int choice)
+static int Preference_PartyInviteH(Menu menu, MenuAction action, int client, int choice)
 {
 	switch(action)
 	{
@@ -1255,7 +1231,7 @@ static bool InviteMenu(int client)
 	return false;
 }
 
-public int Preference_InviteMenuH(Menu menu, MenuAction action, int client, int choice)
+static int Preference_InviteMenuH(Menu menu, MenuAction action, int client, int choice)
 {
 	switch(action)
 	{
@@ -1476,7 +1452,7 @@ int Preference_GetBossQueue(int[] players, int maxsize, bool display, int team =
 	return size;
 }
 
-public int Preference_BossQueueSort(int[] elem1, int[] elem2, const int[][] array, Handle hndl)
+static int Preference_BossQueueSort(int[] elem1, int[] elem2, const int[][] array, Handle hndl)
 {
 	if(elem1[1] > elem2[1])
 		return -1;
@@ -1487,7 +1463,7 @@ public int Preference_BossQueueSort(int[] elem1, int[] elem2, const int[][] arra
 	return (elem1[0] > elem2[0]) ? 1 : -1;
 }
 
-public Action Preference_ForceBossCmd(int client, int args)
+static Action Preference_ForceBossCmd(int client, int args)
 {
 	if(args)
 	{
@@ -1506,12 +1482,14 @@ public Action Preference_ForceBossCmd(int client, int args)
 		{
 			special = Bosses_GetByName(name, false, _, lang);
 		}
+
+		bool rcon = !client || CheckCommandAccess(client, "sm_rcon", ADMFLAG_RCON);
 		
 		if(special == -1)
 		{
 			FReplyToCommand(client, "%t", "Boss Not Found");
 		}
-		else if(!client || Bosses_CanAccessBoss(client, special, true))
+		else if(rcon || Bosses_CanAccessBoss(client, special, false) || Bosses_CanAccessBoss(client, special, true))
 		{
 			BossOverride = special;
 			Bosses_GetBossName(special, name, sizeof(name), lang);
@@ -1553,9 +1531,10 @@ static void ForceBossMenu(int client, int item)
 	char num[12];
 	int lang = GetClientLanguage(client);
 	int length = Bosses_GetConfigLength();
+	bool rcon = CheckCommandAccess(client, "sm_rcon", ADMFLAG_RCON);
 	for(int i; i < length; i++)
 	{
-		if(Bosses_CanAccessBoss(client, i, true))
+		if(rcon || Bosses_CanAccessBoss(client, i, false) || Bosses_CanAccessBoss(client, i, true))
 		{
 			IntToString(i, num, sizeof(num));
 			Bosses_GetBossName(i, name, sizeof(name), lang);
@@ -1566,7 +1545,7 @@ static void ForceBossMenu(int client, int item)
 	menu.DisplayAt(client, item/7*7, MENU_TIME_FOREVER);
 }
 
-public int Preference_ForceBossMenuH(Menu menu, MenuAction action, int client, int choice)
+static int Preference_ForceBossMenuH(Menu menu, MenuAction action, int client, int choice)
 {
 	switch(action)
 	{
@@ -1608,7 +1587,7 @@ static int GetBlacklistCount(int client, int charset)
 	return count;
 }
 
-public void Preference_DisplayBosses(DataPack pack)
+static void Preference_DisplayBosses(DataPack pack)
 {
 	pack.Reset();
 	int client = GetClientOfUserId(pack.ReadCell());
@@ -1816,7 +1795,7 @@ bool Preference_HasDifficulties()
 	return view_as<bool>(Difficulties);
 }
 
-public Action Preference_DifficultyMenuCmd(int client, int args)
+static Action Preference_DifficultyMenuCmd(int client, int args)
 {
 	if(!Preference_HasDifficulties())
 		return Plugin_Continue;
@@ -2028,7 +2007,7 @@ static void DifficultyMenu(int client, const char[] name = NULL_STRING)
 	}
 }
 
-public int Preference_DifficultyMenuH(Menu menu, MenuAction action, int client, int choice)
+static int Preference_DifficultyMenuH(Menu menu, MenuAction action, int client, int choice)
 {
 	switch(action)
 	{
@@ -2068,7 +2047,7 @@ public int Preference_DifficultyMenuH(Menu menu, MenuAction action, int client, 
 	return 0;
 }
 
-public int Preference_DifficultyMenuItemH(Menu menu, MenuAction action, int client, int choice)
+static int Preference_DifficultyMenuItemH(Menu menu, MenuAction action, int client, int choice)
 {
 	switch(action)
 	{

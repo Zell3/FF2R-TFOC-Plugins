@@ -1,10 +1,3 @@
-/*
-	void Menu_PluginStart()
-	void Menu_Command(int client)
-	bool Menu_BackButton(int client)
-	void Menu_MainMenu(int client)
-*/
-
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -37,7 +30,7 @@ bool Menu_BackButton(int client)
 	return InMainMenu[client];
 }
 
-public Action Menu_MainMenuCmd(int client, int args)
+static Action Menu_MainMenuCmd(int client, int args)
 {
 	if(!client)
 	{
@@ -58,6 +51,19 @@ public Action Menu_MainMenuCmd(int client, int args)
 			Bosses_GetCharset(Charset, buffer, sizeof(buffer));
 			PrintToServer("Boss Pack: %s (%d)", buffer, Charset);
 		}
+		
+		Attrib_PrintStatus();
+		CustomAttrib_PrintStatus();
+		DHook_PrintStatus();
+		FileNet_PrintStatus();
+		Goomba_PrintStatus();
+		SDKHook_PrintStatus();
+		SteamWorks_PrintStatus();
+		TF2Items_PrintStatus();
+		TF2U_PrintStatus();
+		TFED_PrintStatus();
+		VScript_PrintStatus();
+		Weapons_PrintStatus();
 		
 		int amount, ready;
 		bool enabled;
@@ -102,34 +108,37 @@ void Menu_MainMenu(int client)
 	SetGlobalTransTarget(client);
 	
 	FormatEx(buffer, sizeof(buffer), "%t", "Command Selection");
-	menu.AddItem(NULL_STRING, buffer);
+	menu.AddItem("0", buffer);
 	
 	FormatEx(buffer, sizeof(buffer), "%t", "Command Queue");
-	menu.AddItem(NULL_STRING, buffer);
+	menu.AddItem("1", buffer);
 	
 	FormatEx(buffer, sizeof(buffer), "%t", "Command Music");
-	menu.AddItem(NULL_STRING, buffer);
+	menu.AddItem("2", buffer);
 	
 	FormatEx(buffer, sizeof(buffer), "%t", "Command Voice");
-	menu.AddItem(NULL_STRING, buffer);
+	menu.AddItem("3", buffer);
 	
-	FormatEx(buffer, sizeof(buffer), "%t", "Command Weapon");
-	menu.AddItem(NULL_STRING, buffer);
+	if(Weapons_ConfigEnabled())
+	{
+		FormatEx(buffer, sizeof(buffer), "%t", "Command Weapon");
+		menu.AddItem("4", buffer);
+	}
 	
 	FormatEx(buffer, sizeof(buffer), "%t", "Command Hud");
-	menu.AddItem(NULL_STRING, buffer);
+	menu.AddItem("5", buffer);
 	
 	if(Preference_HasDifficulties())
 	{
 		FormatEx(buffer, sizeof(buffer), "%t", "Command Difficulty");
-		menu.AddItem(NULL_STRING, buffer);
+		menu.AddItem("6", buffer);
 	}
 	
 	menu.ExitButton = true;
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int Menu_MainMenuH(Menu menu, MenuAction action, int client, int choice)
+static int Menu_MainMenuH(Menu menu, MenuAction action, int client, int choice)
 {
 	switch(action)
 	{
@@ -139,7 +148,9 @@ public int Menu_MainMenuH(Menu menu, MenuAction action, int client, int choice)
 		}
 		case MenuAction_Select:
 		{
-			switch(choice)
+			char buffer[16];
+			menu.GetItem(choice, buffer, sizeof(buffer));
+			switch(StringToInt(buffer))
 			{
 				case 0:
 				{
@@ -177,7 +188,7 @@ public int Menu_MainMenuH(Menu menu, MenuAction action, int client, int choice)
 	return 0;
 }
 
-public Action Menu_VoiceToggle(int client, int args)
+static Action Menu_VoiceToggle(int client, int args)
 {
 	if(client)
 	{
@@ -191,7 +202,7 @@ public Action Menu_VoiceToggle(int client, int args)
 	return Plugin_Handled;
 }
 
-public Action Menu_QueueMenuCmd(int client, int args)
+static Action Menu_QueueMenuCmd(int client, int args)
 {
 	if(GetCmdReplySource() == SM_REPLY_TO_CONSOLE)
 	{
@@ -257,7 +268,7 @@ static void QueueMenu(int client)
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int Menu_QueueMenuH(Menu menu, MenuAction action, int client, int choice)
+static int Menu_QueueMenuH(Menu menu, MenuAction action, int client, int choice)
 {
 	switch(action)
 	{
@@ -304,7 +315,7 @@ static void ResetQueueMenu(int client)
 	menu.Display(client, MENU_TIME_FOREVER);
 }
 
-public int ResetQueueMenuH(Menu menu, MenuAction action, int client, int choice)
+static int ResetQueueMenuH(Menu menu, MenuAction action, int client, int choice)
 {
 	switch(action)
 	{
@@ -323,7 +334,7 @@ public int ResetQueueMenuH(Menu menu, MenuAction action, int client, int choice)
 	return 0;
 }
 
-public Action Menu_HudToggle(int client, int args)
+static Action Menu_HudToggle(int client, int args)
 {
 	if(client)
 	{
@@ -337,7 +348,7 @@ public Action Menu_HudToggle(int client, int args)
 	return Plugin_Handled;
 }
 
-public Action Menu_AddPointsCmd(int client, int args)
+static Action Menu_AddPointsCmd(int client, int args)
 {
 	if(args == 2)
 	{
@@ -359,7 +370,7 @@ public Action Menu_AddPointsCmd(int client, int args)
 			ReplyToTargetError(client, matches);
 		}
 	}
-	else if(args || GetCmdReplySource() == SM_REPLY_TO_CONSOLE)
+	else if(args || GetCmdReplySource() == SM_REPLY_TO_CONSOLE || GetFeatureStatus(FeatureType_Native, "AddTargetsToMenu") != FeatureStatus_Available)
 	{
 		ReplyToCommand(client, "[SM] Usage: ff2_addpoints <player> <points>");
 	}
@@ -402,7 +413,7 @@ static void AddPointsMenu(int client, const char[] userid = NULL_STRING)
 	}
 }
 
-public int Menu_AddPointsTargetH(Menu menu, MenuAction action, int client, int choice)
+static int Menu_AddPointsTargetH(Menu menu, MenuAction action, int client, int choice)
 {
 	switch(action)
 	{
@@ -420,7 +431,7 @@ public int Menu_AddPointsTargetH(Menu menu, MenuAction action, int client, int c
 	return 0;
 }
 
-public int Menu_AddPointsActionH(Menu menu, MenuAction action, int client, int choice)
+static int Menu_AddPointsActionH(Menu menu, MenuAction action, int client, int choice)
 {
 	switch(action)
 	{

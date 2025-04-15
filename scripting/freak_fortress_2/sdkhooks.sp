@@ -1,10 +1,3 @@
-/*
-	void SDKHook_PluginStart()
-	void SDKHook_LibraryAdded(const char[] name)
-	void SDKHook_LibraryRemoved(const char[] name)
-	void SDKHook_HookClient(int client)
-*/
-
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -60,12 +53,17 @@ void SDKHook_LibraryRemoved(const char[] name)
 	}
 }
 
+void SDKHook_PrintStatus()
+{
+	PrintToServer("'%s' is %sloaded", OTD_LIBRARY, OTDLoaded ? "" : "not ");
+}
+
 void SDKHook_HookClient(int client)
 {
 	if(!OTDLoaded)
 		SDKHook(client, SDKHook_OnTakeDamage, SDKHook_TakeDamage);
 	
-	SDKHook(client, SDKHook_OnTakeDamagePost, SDKHook_TakeDamagePost);
+	SDKHook(client, SDKHook_OnTakeDamageAlivePost, SDKHook_TakeDamagePost);
 	SDKHook(client, SDKHook_WeaponSwitchPost, SDKHook_SwitchPost);
 }
 
@@ -97,7 +95,7 @@ public void OnEntityDestroyed(int entity)
 	DHook_EntityDestoryed();
 }
 
-public Action SDKHook_TakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
+static Action SDKHook_TakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3], int damagecustom)
 {
 	CritType crit = (damagetype & DMG_CRIT) ? CritType_Crit : CritType_None;
 	return TF2_OnTakeDamage(victim, attacker, inflictor, damage, damagetype, weapon, damageForce, damagePosition, damagecustom, crit);
@@ -136,7 +134,7 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 			if(IsInvuln(victim))
 				return Plugin_Continue;
 			
-			Weapons_OnHitBossPre(attacker, victim, damage, weapon, view_as<int>(critType), damagecustom, damagetype);
+			CustomAttrib_OnHitBossPre(attacker, victim, damage, damagetype, weapon, damagecustom, view_as<int>(critType));
 			
 			switch(damagecustom)
 			{
@@ -151,11 +149,11 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 					
 					float gameTime = GetGameTime();
 					
-					damage = 750.0;	// 2250 max damage
+					damage = Client(victim).Minion ? 500.0 : 750.0;	// 2250 max damage
 					damagetype |= DMG_PREVENT_PHYSICS_FORCE|DMG_CRIT;
 					critType = CritType_Crit;
 					
-					if(!Client(attacker).IsBoss && weapon != -1)
+					if(!Client(victim).Minion && !Client(attacker).IsBoss && weapon != -1)
 					{
 						SetEntPropFloat(attacker, Prop_Send, "m_flStealthNextChangeTime", gameTime+0.5);
 						
@@ -181,10 +179,13 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 					bool silent = Attributes_OnBackstabBoss(attacker, victim, damage, weapon, true);
 					if(!silent)
 					{
-						EmitSoundToClient(victim, "player/spy_shield_break.wav", _, _, _, _, 0.7);
-						EmitSoundToClient(attacker, "player/spy_shield_break.wav", _, _, _, _, 0.7);
+						if(!Client(victim).Minion)
+						{
+							EmitSoundToClient(victim, "player/spy_shield_break.wav", _, _, _, _, 0.7);
+							EmitSoundToClient(attacker, "player/spy_shield_break.wav", _, _, _, _, 0.7);
+						}
 						
-						if(Cvar[SoundType].BoolValue)
+						if(!MultiBosses())
 						{
 							if(!Client(attacker).IsBoss || !Bosses_PlaySoundToAll(victim, "sound_stabbed_boss", _, _, _, _, _, 2.0))
 								Bosses_PlaySoundToAll(victim, "sound_stabbed", _, _, _, _, _, 2.0);
@@ -196,7 +197,7 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 					}
 					
 					float stale, time;
-					Weapons_OnBackstabBoss(victim, damage, weapon, time, stale);
+					CustomAttrib_OnBackstabBoss(victim, damage, weapon, time, stale);
 					
 					float multi = 0.666667;
 					if(!Client(attacker).IsBoss)
@@ -239,7 +240,7 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 					damagetype |= DMG_CRIT;
 					critType = CritType_Crit;
 					
-					int assister;
+					int assister = -1;
 					int entity = GetEntPropEnt(attacker, Prop_Send, "m_hGroundEntity");
 					if(entity > MaxClients)
 					{
@@ -278,13 +279,13 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 					
 					event.Cancel();
 					
-					if(Cvar[SoundType].BoolValue)
+					if(MultiBosses())
 					{
-						Bosses_PlaySoundToAll(victim, "sound_telefraged", _, _, _, _, _, 2.0);
+						Bosses_PlaySoundToAll(victim, "sound_telefraged", _, victim, SNDCHAN_AUTO, SNDLEVEL_AIRCRAFT, _, 2.0);
 					}
 					else
 					{
-						Bosses_PlaySoundToAll(victim, "sound_telefraged", _, victim, SNDCHAN_AUTO, SNDLEVEL_AIRCRAFT, _, 2.0);
+						Bosses_PlaySoundToAll(victim, "sound_telefraged", _, _, _, _, _, 2.0);
 					}
 					return Plugin_Changed;
 				}
@@ -300,10 +301,6 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 					// The thing everyone hates but can't remove
 					damage *= 3.0;
 				}
-			}
-			else
-			{
-				Attributes_OnHitBossPre(attacker, victim, damagetype, weapon, view_as<int>(critType));
 			}
 			
 			return Plugin_Changed;
@@ -374,8 +371,15 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 				damage *= 3.0;
 				changed = true;
 			}
+
+			if(TF2_IsPlayerInCondition(attacker, TFCond_Sapped))
+			{
+				// 25% less damage while being sapped
+				damage *= 0.75;
+				changed = true;
+			}
 			
-			if(!Attributes_FindOnWeapon(attacker, weapon, 797))
+			if(!Attrib_FindOnWeapon(attacker, weapon, "dmg pierces resists absorbs"))
 			{
 				if(TF2_IsPlayerInCondition(victim, TFCond_Disguised))
 				{
@@ -399,9 +403,7 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 							damagetype &= ~DMG_CRIT;
 							changed = true;
 						}
-						
-						// TODO: Figure out if uber and passive of the same type is or can be applied at the same time
-						if(TF2_IsPlayerInCondition(victim, cond + view_as<TFCond>(3)))
+						else if(TF2_IsPlayerInCondition(victim, cond + view_as<TFCond>(3)))
 						{
 							// Passive Variant
 							damage *= 0.9;
@@ -409,14 +411,6 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 						}
 					}
 				}
-			}
-			
-			if(melee && critType == CritType_Crit && GetEntProp(victim, Prop_Send, "m_bFeignDeathReady") && !TF2_IsCritBoosted(attacker))
-			{
-				// Make random crits less brutal for Dead Ringers
-				critType = CritType_None;	//TODO: See if tf_ontakedamage needs an manual mini-crit boost check
-				damagetype &= ~DMG_CRIT;
-				changed = true;
 			}
 			
 			if(changed && critType == CritType_None && (damagetype & DMG_CRIT))
@@ -428,23 +422,23 @@ public Action TF2_OnTakeDamage(int victim, int &attacker, int &inflictor, float 
 	return Plugin_Continue;
 }
 
-public void SDKHook_TakeDamagePost(int victim, int attacker, int inflictor, float damage, int damagetype, int weapon, const float damageForce[3], const float damagePosition[3], int damagecustom)
+static void SDKHook_TakeDamagePost(int victim, int attacker, int inflictor, float damage, int damagetype, int weapon, const float damageForce[3], const float damagePosition[3], int damagecustom)
 {
 	if(Client(victim).IsBoss)
 	{
 		if(victim != attacker && attacker > 0 && attacker <= MaxClients && !IsInvuln(victim) && !Client(attacker).IsBoss)
-			Attributes_OnHitBoss(attacker, victim, inflictor, damage, weapon, damagecustom);
+			Attributes_OnHitBoss(attacker, victim, inflictor, damage, damagetype, weapon, damagecustom);
 		
 		Bosses_SetSpeed(victim);
 	}
 }
 
-public void SDKHook_SwitchPost(int client, int weapon)
+static void SDKHook_SwitchPost(int client, int weapon)
 {
-	Weapons_OnWeaponSwitch(client, weapon);
+	CustomAttrib_OnWeaponSwitch(client, weapon);
 }
 
-public Action SDKHook_NormalSHook(int clients[MAXPLAYERS], int &numClients, char sample[PLATFORM_MAX_PATH], int &entity, int &channel, float &volume, int &level, int &pitch, int &flags, char soundEntry[PLATFORM_MAX_PATH], int &seed)
+static Action SDKHook_NormalSHook(int clients[MAXPLAYERS], int &numClients, char sample[PLATFORM_MAX_PATH], int &entity, int &channel, float &volume, int &level, int &pitch, int &flags, char soundEntry[PLATFORM_MAX_PATH], int &seed)
 {
 	if(entity > 0 && entity <= MaxClients && ((channel == SNDCHAN_VOICE && StrContains(sample, "ambient_mp3", false) == -1) || (channel == SNDCHAN_STATIC && !StrContains(sample, "vo", false))))
 	{
@@ -514,7 +508,7 @@ public Action SDKHook_NormalSHook(int clients[MAXPLAYERS], int &numClients, char
 				strcopy(sample, sizeof(sample), sound.Sound);
 				
 				Client(entity).Speaking = true;
-				for(int i = 1; i < count; i++)
+				for(int i; i < count; i++)
 				{
 					EmitSound(clients, numClients, sample, entity, channel, level, flags, volume, pitch);
 				}
@@ -534,7 +528,7 @@ public Action SDKHook_NormalSHook(int clients[MAXPLAYERS], int &numClients, char
 	return Plugin_Continue;
 }
 
-public Action SDKHook_HealthTouch(int entity, int client)
+static Action SDKHook_HealthTouch(int entity, int client)
 {
 	if(client > 0 && client <= MaxClients && (Client(client).Minion || (Client(client).IsBoss && (Client(client).Pickups != 1 && Client(client).Pickups < 3))))
 		return Plugin_Handled;
@@ -542,7 +536,7 @@ public Action SDKHook_HealthTouch(int entity, int client)
 	return Plugin_Continue;
 }
 
-public Action SDKHook_AmmoTouch(int entity, int client)
+static Action SDKHook_AmmoTouch(int entity, int client)
 {
 	if(client > 0 && client <= MaxClients && (Client(client).Minion || (Client(client).IsBoss && Client(client).Pickups < 2)))
 		return Plugin_Handled;
@@ -550,7 +544,7 @@ public Action SDKHook_AmmoTouch(int entity, int client)
 	return Plugin_Continue;
 }
 
-public Action SDKHook_TimerSpawn(int entity)
+static Action SDKHook_TimerSpawn(int entity)
 {
 	DispatchKeyValue(entity, "auto_countdown", "0");
 	return Plugin_Continue;

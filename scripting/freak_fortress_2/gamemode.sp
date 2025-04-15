@@ -1,18 +1,3 @@
-/*
-	void Gamemode_PluginStart()
-	void Gamemode_MapStart()
-	void Gamemode_RoundSetup()
-	void Gamemode_RoundStart()
-	void Gamemode_CheckPointUnlock(int alive, bool notice)
-	void Gamemode_OverrideWinner(int team = -1)
-	void Gamemode_RoundEnd(int winteam)
-	void Gamemode_UpdateHUD(int team, bool healing = false, bool nobar = false)
-	void Gamemode_SetClientGlow(int client, float duration)void Gamemode_SetClientGlow(int client, float duration)
-	void Gamemode_PlayerRunCmd(int client)
-	void Gamemode_ConditionAdded(int client, TFCond cond)
-	void Gamemode_ConditionRemoved(int client, TFCond cond)
-*/
-
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -46,6 +31,7 @@ void Gamemode_MapInit()
 {
 	char mapname[64];
 	GetCurrentMap(mapname, sizeof(mapname));
+	GetMapDisplayName(mapname, mapname, sizeof(mapname));
 	if(Configs_MapIsGamemode(mapname))
 	{
 		bool addMaster;
@@ -120,15 +106,7 @@ void Gamemode_MapInit()
 void Gamemode_MapStart()
 {
 	RoundStatus = -1;
-	Waiting = true;
-	for(int i = 1; i <= MaxClients; i++)
-	{
-		if(IsClientInGame(i))
-		{
-			Waiting = false;
-			break;
-		}
-	}
+	Waiting = GameRules_GetRoundState() < RoundState_StartGame;
 }
 
 void Gamemode_MapEnd()
@@ -163,7 +141,6 @@ void Gamemode_RoundSetup()
 		if(Waiting)
 		{
 			Cvar[Tournament].BoolValue = true;
-			Cvar[MovementFreeze].BoolValue = false;
 			ServerCommand("mp_waitingforplayers_restart 1");
 		}
 		else if(!GameRules_GetProp("m_bInWaitingForPlayers", 1))
@@ -312,6 +289,7 @@ public void TF2_OnWaitingForPlayersStart()
 	{
 		Waiting = false;
 		Cvar[Tournament].BoolValue = false;
+		Cvar[MovementFreeze].BoolValue = false;
 		CreateTimer(4.0, Gamemode_TimerRespawn, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
 
 		delete BackupTimer;
@@ -325,7 +303,7 @@ public void TF2_OnWaitingForPlayersEnd()
 		Cvar[MovementFreeze].BoolValue = true;
 }
 
-public Action Gamemode_TimerRespawn(Handle timer)
+static Action Gamemode_TimerRespawn(Handle timer)
 {
 	if(!GameRules_GetProp("m_bInWaitingForPlayers", 1))
 		return Plugin_Stop;
@@ -340,7 +318,7 @@ public Action Gamemode_TimerRespawn(Handle timer)
 	return Plugin_Continue;
 }
 
-public Action Gamemode_BackupWaiting(Handle timer)
+static Action Gamemode_BackupWaiting(Handle timer)
 {
 	// There is some cases where waiting for players could get stuck and fail to restart the round
 	// Here's the duct tape fix until I can find a way to properly patch it
@@ -354,7 +332,7 @@ public Action Gamemode_BackupWaiting(Handle timer)
 	return Plugin_Continue;
 }
 
-public Action Gamemode_IntroTimer(Handle timer)
+static Action Gamemode_IntroTimer(Handle timer)
 {
 	for(int client = 1; client <= MaxClients; client++)
 	{
@@ -386,7 +364,7 @@ public Action Gamemode_IntroTimer(Handle timer)
 	return Plugin_Continue;
 }
 
-public Action Gamemode_SetControlPoint(Handle timer)
+static Action Gamemode_SetControlPoint(Handle timer)
 {
 	Events_CheckAlivePlayers();
 	
@@ -445,61 +423,73 @@ void Gamemode_RoundStart()
 	
 	Events_CheckAlivePlayers(_, _, true);
 	
-	bool enabled = (Enabled && !GameRules_GetProp("m_bInWaitingForPlayers", 1));
-	
-	int[] merc = new int[MaxClients];
-	int[] boss = new int[MaxClients];
-	int mercs, bosses;
-	
-	for(int client = 1; client <= MaxClients; client++)
+	if(Enabled && !GameRules_GetProp("m_bInWaitingForPlayers", 1))
 	{
-		if(IsClientInGame(client))
+		int[] merc = new int[MaxClients];
+		int[] boss = new int[MaxClients];
+		int mercs, bosses;
+
+		bool bvb = Cvar[BossVsBoss].BoolValue;
+		int mercTeam = TFTeam_Red;
+		if(!bvb)
 		{
-			if(Client(client).IsBoss)
+			int client = FindClientOfBossIndex(0);
+			if(client != -1)
+				mercTeam = GetClientTeam(client) == TFTeam_Red ? TFTeam_Blue : TFTeam_Red;
+		}
+	
+		for(int client = 1; client <= MaxClients; client++)
+		{
+			if(IsClientInGame(client))
 			{
-				boss[bosses++] = client;
-			}
-			else
-			{
-				merc[mercs++] = client;
-				
-				if(enabled && IsPlayerAlive(client))
+				if(Client(client).IsBoss)
 				{
-					TF2_RegeneratePlayer(client);
+					boss[bosses++] = client;
+				}
+				else
+				{
+					merc[mercs++] = client;
 					
-					int entity = GetPlayerWeaponSlot(client, TFWeaponSlot_Secondary);
-					if(IsValidEntity(entity) && HasEntProp(entity, Prop_Send, "m_flChargeLevel"))
-						SetEntPropFloat(entity, Prop_Send, "m_flChargeLevel", 0.0);
+					if(IsPlayerAlive(client))
+					{
+						if(!bvb && IsFakeClient(client) && GetClientTeam(client) != mercTeam)
+						{
+							ChangeClientTeam(client, mercTeam);
+						}
+						else
+						{
+							TF2_RegeneratePlayer(client);
+							TF2_RefillMaxAmmo(client);
+						}
+						
+						int entity = GetPlayerWeaponSlot(client, TFWeaponSlot_Secondary);
+						if(IsValidEntity(entity) && HasEntProp(entity, Prop_Send, "m_flChargeLevel"))
+							SetEntPropFloat(entity, Prop_Send, "m_flChargeLevel", Attrib_FindOnPlayer(client, "ubercharge_preserved_on_spawn_max"));
+					}
 				}
 			}
 		}
-	}
-	
-	char buffer[512];
-	bool specTeam = Cvar[SpecTeam].BoolValue;
-	for(int i; i < bosses; i++)
-	{
-		int team = GetClientTeam(boss[i]);
-		int amount = 1;
-		for(int a = specTeam ? TFTeam_Unassigned : TFTeam_Spectator; a < TFTeam_MAX; a++)
-		{
-			if(team != a)
-				amount += PlayersAlive[a];
-		}
 		
-		Bosses_SetHealth(boss[i], amount);
-		
-		if(enabled)
+		char buffer[512];
+		bool specTeam = Cvar[SpecTeam].BoolValue;
+		for(int i; i < bosses; i++)
 		{
+			int team = GetClientTeam(boss[i]);
+			int amount = 1;
+			for(int a = specTeam ? TFTeam_Unassigned : TFTeam_Spectator; a < TFTeam_MAX; a++)
+			{
+				if(team != a)
+					amount += PlayersAlive[a];
+			}
+			
+			Bosses_SetHealth(boss[i], amount);
+			
 			if(Client(boss[i]).Cfg.Get("command", buffer, sizeof(buffer)))
 				ServerCommand(buffer);
 			
 			Forward_OnBossCreated(boss[i], Client(boss[i]).Cfg, false);
 			Preference_ApplyDifficulty(boss[i], boss[i], false);
-		}
-		
-		if(enabled)
-		{
+			
 			int maxhealth = Client(boss[i]).MaxHealth;
 			int maxlives = Client(boss[i]).MaxLives;
 			
@@ -663,12 +653,16 @@ void Gamemode_RoundEnd(int winteam)
 		}
 	}
 	
+	int teamColor[4], winColor[4];
+	winColor = TeamColors[winner];
+
 	bool spec = Cvar[SpecTeam].BoolValue;
 	for(int i; i < TFTeam_MAX; i++)
 	{
 		if(HasBoss[i] && bosses[i])
 		{
-			SetHudTextParamsEx(-1.0, 0.25 + (i * 0.05), 15.0, TeamColors[i], TeamColors[winner], 2, 0.1, 0.1);
+			teamColor = TeamColors[i];
+			SetHudTextParamsEx(-1.0, 0.25 + (i * 0.05), 15.0, teamColor, winColor, 2, 0.1, 0.1);
 			for(int a; a < total; a++)
 			{
 				if(!Client(clients[a]).NoHud)
@@ -695,7 +689,8 @@ void Gamemode_RoundEnd(int winteam)
 		}
 		else if(Enabled && MaxPlayersAlive[i] && (spec || i > TFTeam_Spectator))
 		{
-			SetHudTextParamsEx(-1.0, 0.25 + (i * 0.05), 15.0, TeamColors[i], TeamColors[winner], 2, 0.1, 0.1);
+			teamColor = TeamColors[i];
+			SetHudTextParamsEx(-1.0, 0.25 + (i * 0.05), 15.0, teamColor, winColor, 2, 0.1, 0.1);
 			for(int a; a < total; a++)
 			{
 				if(!Client(clients[a]).NoHud)
@@ -862,6 +857,9 @@ void Gamemode_UpdateHUD(int team, bool healing = false, bool nobar = false)
 			{
 				if(count > 1)
 				{
+					int color[4];
+					color = TeamColors[team];
+
 					float x = (team == TFTeam_Red || team == TFTeam_Spectator) ? 0.53 : 0.43;
 					float y = team <= TFTeam_Spectator ? 0.18 : 0.12;
 					for(int i; i < total; i++)
@@ -871,11 +869,11 @@ void Gamemode_UpdateHUD(int team, bool healing = false, bool nobar = false)
 						
 						if(IsPlayerAlive(clients[i]))
 						{
-							SetHudTextParamsEx(x, y, 3.0, TeamColors[team], TeamColors[team], 0, 0.35, 0.0, 0.1);
+							SetHudTextParamsEx(x, y, 3.0, color, color, 0, 0.35, 0.0, 0.1);
 						}
 						else
 						{
-							SetHudTextParamsEx(x, y+0.1, 3.0, TeamColors[team], TeamColors[team], 0, 0.35, 0.0, 0.1);
+							SetHudTextParamsEx(x, y+0.1, 3.0, color, color, 0, 0.35, 0.0, 0.1);
 						}
 						
 						if(bosses > 1)
@@ -925,7 +923,7 @@ void Gamemode_UpdateHUD(int team, bool healing = false, bool nobar = false)
 			}
 			
 			float refresh = Cvar[RefreshTime].FloatValue;
-			if(setting == 1 || nobar)
+			if(setting == 2 || nobar)
 			{
 			}
 			else if(count < 3)
@@ -942,8 +940,8 @@ void Gamemode_UpdateHUD(int team, bool healing = false, bool nobar = false)
 					entity = FindEntityByClassname(-1, "monster_resource");
 					if(!maxcombined)
 					{
-						//if(entity != -1)
-						//	RemoveEntity(entity);
+						if(entity != -1)
+							SetEntProp(entity, Prop_Send, "m_iBossHealthPercentageByte", 0, 2);
 					}
 					else
 					{
@@ -976,7 +974,13 @@ void Gamemode_UpdateHUD(int team, bool healing = false, bool nobar = false)
 						{
 							amount = combined * 255 / maxcombined;
 							if(!amount)
+							{
 								amount = 1;
+							}
+							else if(amount > 255)
+							{
+								amount = 255;
+							}
 						}
 						
 						SetEntProp(entity, Prop_Send, "m_iBossHealthPercentageByte", amount, 2);
@@ -1066,7 +1070,7 @@ static int SetTeamBasedHealthBar(int health1, int team1)
 	return health2;
 }
 
-public Action Gamemode_UpdateHudTimer(Handle timer, int team)
+static Action Gamemode_UpdateHudTimer(Handle timer, int team)
 {
 	HudTimer[team] = null;
 	Gamemode_UpdateHUD(team);
@@ -1094,10 +1098,8 @@ void Gamemode_PlayerRunCmd(int client, int buttons)
 			if(PlayersAlive[team] < 2) 
 			{
 				TF2_AddCondition(client, TFCond_CritOnDamage, 0.5);
-				if (Cvar[PlayerGlow].BoolValue)
-				{
+				if(Cvar[PlayerGlow].BoolValue)
 					Gamemode_SetClientGlow(client, 5.0);
-				}
 			}
 		}
 		
@@ -1119,7 +1121,7 @@ void Gamemode_PlayerRunCmd(int client, int buttons)
 	float time = GetEngineTime();
 	if(Enabled && RoundStatus == 1 && !Client(client).IsBoss && !Client(client).NoHud && !Client(client).NoDmgHud && !(buttons & IN_SCORE))
 	{
-		if(Client(client).RefreshAt < time)
+		if(Client(client).SapperCooldownFor < time && Client(client).RefreshAt < time)
 		{
 			Client(client).RefreshAt = time + 0.2;
 			
@@ -1172,11 +1174,9 @@ void Gamemode_PlayerRunCmd(int client, int buttons)
 	if(Client(client).OverlayFor && Client(client).OverlayFor < time)
 	{
 		Client(client).OverlayFor = 0.0;
-		
-		int flags = GetCommandFlags("r_screenoverlay");
-		SetCommandFlags("r_screenoverlay", flags & ~FCVAR_CHEAT);
-		ClientCommand(client, "r_screenoverlay off");
-		SetCommandFlags("r_screenoverlay", flags);
+
+		SetVariantString(NULL_STRING);
+		AcceptEntityInput(client, "SetScriptOverlayMaterial", client, client);
 	}
 }
 
@@ -1195,7 +1195,7 @@ void Gamemode_ConditionRemoved(int client, TFCond cond)
 	}
 }
 
-public Action Gamemode_DisguiseTimer(Handle timer, int userid)
+static Action Gamemode_DisguiseTimer(Handle timer, int userid)
 {
 	int client = GetClientOfUserId(userid);
 	if(client && TF2_IsPlayerInCondition(client, TFCond_Disguised))

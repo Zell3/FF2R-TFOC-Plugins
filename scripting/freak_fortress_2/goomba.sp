@@ -1,14 +1,14 @@
-/*
-	void Goomba_RoundSetup()
-	void Goomba_BossCreated(ConfigMap cfg)
-*/
-
 #tryinclude <goomba>
 
 #pragma semicolon 1
 #pragma newdecls required
 
 static int GoombaOverride = 1;
+
+void Goomba_PrintStatus()
+{
+	PrintToServer("'goomba' is %sloaded", LibraryExists("goomba") ? "" : "not ");
+}
 
 void Goomba_RoundSetup()
 {
@@ -63,5 +63,11 @@ public Action OnStomp(int attacker, int victim, float &damageMultiplier, float &
 		JumpPower *= 1.5;
 		return Plugin_Changed;
 	}
+	else if(Client(attacker).IsBoss)
+	{
+		JumpPower = 0.0;
+		return Plugin_Changed;
+	}
+
 	return Plugin_Continue;
 }

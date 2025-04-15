@@ -1,7 +1,3 @@
-/*
-	void Command_PluginStart()
-*/
-
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -30,7 +26,7 @@ void Command_PluginStart()
 	AddCommandListener(Command_EurekaTeleport, "eureka_teleport");
 }
 
-public bool FF2TargetFilter(const char[] pattern, ArrayList clients)
+static bool FF2TargetFilter(const char[] pattern, ArrayList clients)
 {
 	FF2FilterSearch filterSearch = StrContains(pattern, "minion", true) != -1 ? FF2FilterSearch_Minion : FF2FilterSearch_Boss;
 	bool isOppositeFilter = pattern[1] == '!';
@@ -78,7 +74,7 @@ public bool FF2TargetFilter(const char[] pattern, ArrayList clients)
 	return true;
 }
 
-public Action Command_Voicemenu(int client, const char[] command, int args)
+static Action Command_Voicemenu(int client, const char[] command, int args)
 {
 	if(client && args == 2 && Client(client).IsBoss && IsPlayerAlive(client) && (!Enabled || RoundStatus == 1))
 	{
@@ -121,7 +117,7 @@ public Action Command_Voicemenu(int client, const char[] command, int args)
 	return Plugin_Continue;
 }
 
-public Action Command_KermitSewerSlide(int client, const char[] command, int args)
+static Action Command_KermitSewerSlide(int client, const char[] command, int args)
 {
 	if(Enabled)
 	{
@@ -131,7 +127,7 @@ public Action Command_KermitSewerSlide(int client, const char[] command, int arg
 	return Plugin_Continue;
 }
 
-public Action Command_Spectate(int client, const char[] command, int args)
+static Action Command_Spectate(int client, const char[] command, int args)
 {
 	if((!Client(client).IsBoss && !Client(client).Minion && (!Enabled || GameRules_GetProp("m_bInWaitingForPlayers", 1))) || IsEmptyServer())
 		return Plugin_Continue;
@@ -139,7 +135,7 @@ public Action Command_Spectate(int client, const char[] command, int args)
 	return SwapTeam(client, TFTeam_Spectator);
 }
 
-public Action Command_AutoTeam(int client, const char[] command, int args)
+static Action Command_AutoTeam(int client, const char[] command, int args)
 {
 	if((!Client(client).IsBoss && !Client(client).Minion && (!Enabled || GameRules_GetProp("m_bInWaitingForPlayers", 1))) || IsEmptyServer())
 		return Plugin_Continue;
@@ -182,7 +178,7 @@ public Action Command_AutoTeam(int client, const char[] command, int args)
 	return SwapTeam(client, team);
 }
 
-public Action Command_JoinTeam(int client, const char[] command, int args)
+static Action Command_JoinTeam(int client, const char[] command, int args)
 {
 	if((!Client(client).IsBoss && !Client(client).Minion && (!Enabled || GameRules_GetProp("m_bInWaitingForPlayers", 1))) || IsEmptyServer())
 		return Plugin_Continue;
@@ -285,7 +281,7 @@ static Action SwapTeam(int client, int wantTeam)
 	return Plugin_Continue;
 }
 
-public Action Command_AggressiveSwap(Handle timer, DataPack pack)
+static Action Command_AggressiveSwap(Handle timer, DataPack pack)
 {
 	pack.Reset();
 	int client = GetClientOfUserId(pack.ReadCell());
@@ -301,7 +297,7 @@ public Action Command_AggressiveSwap(Handle timer, DataPack pack)
 	return Plugin_Stop;
 }
 
-public Action Command_JoinClass(int client, const char[] command, int args)
+static Action Command_JoinClass(int client, const char[] command, int args)
 {
 	if(Client(client).IsBoss || Client(client).Minion)
 	{
@@ -324,7 +320,7 @@ public Action Command_JoinClass(int client, const char[] command, int args)
 	return Plugin_Continue;
 }
 
-public Action Command_EurekaTeleport(int client, const char[] command, int args)
+static Action Command_EurekaTeleport(int client, const char[] command, int args)
 {
 	if(Enabled && RoundStatus == 1 && IsPlayerAlive(client))
 	{

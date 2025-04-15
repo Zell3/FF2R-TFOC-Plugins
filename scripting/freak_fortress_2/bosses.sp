@@ -1,41 +1,7 @@
-/*
-	void Bosses_PluginStart()
-	void Bosses_BuildPacks(int &charset, const char[] mapname)
-	void Bosses_MapEnd()
-	void Bosses_PluginEnd()
-	int Bosses_GetCharset(int charset, char[] buffer, int length)
-	int Bosses_GetCharsetLength()
-	ConfigMap Bosses_GetConfig(int special)
-	int Bosses_GetConfigLength()
-	int Bosses_GetByName(const char[] name, bool exact = true, bool enabled = true, int lang = -1, const char[] string = "name")
-	bool Bosses_CanAccessBoss(int client, int special, bool playing = false, int team = -1, bool enabled = true, bool &preview = false)
-	bool Bosses_GetBossName(int special, char[] buffer, int length, int lang = -1, const char[] string = "name")
-	bool Bosses_GetBossNameCfg(ConfigMap cfg, char[] buffer, int length, int lang = -1, const char[] string = "name")
-	void Bosses_CreateFromSpecial(int client, int special, int team, int leader = 0)
-	void Bosses_CreateFromConfig(int client, ConfigMap cfg, int team, int leader = 0)
-	void Bosses_SetHealth(int client, int players)
-	void Bosses_Equip(int client)
-	void Bosses_UpdateHealth(int client)
-	void Bosses_SetSpeed(int client)
-	void Bosses_ClientDisconnect(int client)
-	void Bosses_Remove(int client)
-	int Bosses_GetBossTeam()
-	void Bosses_PlayerRunCmd(int client, int buttons)
-	void Bosses_UseSlot(int client, int low, int high)
-	void Bosses_UseAbility(int client, const char[] plugin = NULL_STRING, const char[] ability, int slot, int buttonmode = 0)
-	int Bosses_GetArgInt(int client, const char[] ability, const char[] argument, int &value, int base = 10)
-	int Bosses_GetArgFloat(int client, const char[] ability, const char[] argument, float &value)
-	int Bosses_GetArgString(int client, const char[] ability, const char[] argument, char[] value, int length)
-	int Bosses_GetRandomSound(int client, const char[] key, SoundEnum sound, const char[] required = NULL_STRING)
-	int Bosses_GetRandomSoundCfg(ConfigMap cfg, const char[] key, SoundEnum sound, const char[] required = NULL_STRING)
-	int Bosses_GetSpecificSoundCfg(ConfigMap cfg, const char[] section, char[] key, int length, SoundEnum sound)
-	bool Bosses_PlaySound(int boss, const int[] clients, int numClients, const char[] key, const char[] required = NULL_STRING, int entity = SOUND_FROM_PLAYER, int channel = SNDCHAN_AUTO, int level = SNDLEVEL_NORMAL, int flags = SND_NOFLAGS, float volume = SNDVOL_NORMAL, int pitch = SNDPITCH_NORMAL, int speakerentity = -1, const float origin[3]=NULL_VECTOR, const float dir[3]=NULL_VECTOR, bool updatePos = true, float soundtime = 0.0)
-	bool Bosses_PlaySoundToClient(int boss, int client, const char[] key, const char[] required = NULL_STRING, int entity = SOUND_FROM_PLAYER, int channel = SNDCHAN_AUTO, int level = SNDLEVEL_NORMAL, int flags = SND_NOFLAGS, float volume = SNDVOL_NORMAL, int pitch = SNDPITCH_NORMAL, int speakerentity = -1, const float origin[3]=NULL_VECTOR, const float dir[3]=NULL_VECTOR, bool updatePos = true, float soundtime = 0.0)
-	bool Bosses_PlaySoundToAll(int boss, const char[] key, const char[] required = NULL_STRING, int entity = SOUND_FROM_PLAYER, int channel = SNDCHAN_AUTO, int level = SNDLEVEL_NORMAL, int flags = SND_NOFLAGS, float volume = SNDVOL_NORMAL, int pitch = SNDPITCH_NORMAL, int speakerentity = -1, const float origin[3]=NULL_VECTOR, const float dir[3]=NULL_VECTOR, bool updatePos = true, float soundtime = 0.0)
-*/
-
 #pragma semicolon 1
 #pragma newdecls required
+
+#define SAPPER_MAX_DISTANCE_SQAURE (160.0 * 160.0)
 
 static ArrayList BossList;
 static ArrayList PackList;
@@ -52,7 +18,7 @@ void Bosses_PluginStart()
 	RegServerCmd("ff2_unloadsubplugins", Bosses_DebugUnloadCmd, "Unloads freak subplugins");
 }
 
-public Action Bosses_DebugCacheCmd(int args)
+static Action Bosses_DebugCacheCmd(int args)
 {
 	if(args)
 	{
@@ -85,27 +51,28 @@ public Action Bosses_DebugCacheCmd(int args)
 	return Plugin_Handled;
 }
 
-public Action Bosses_DebugLoadCmd(int args)
+static Action Bosses_DebugLoadCmd(int args)
 {
 	EnableSubplugins();
 	return Plugin_Handled;
 }
 
-public Action Bosses_DebugUnloadCmd(int args)
+static Action Bosses_DebugUnloadCmd(int args)
 {
 	DisableSubplugins();
 	return Plugin_Handled;
 }
 
-public Action Bosses_ReloadCharsetCmd(int client, int args)
+static Action Bosses_ReloadCharsetCmd(int client, int args)
 {
 	char mapname[64];
 	GetCurrentMap(mapname, sizeof(mapname));
+	GetMapDisplayName(mapname, mapname, sizeof(mapname));
 	Bosses_BuildPacks(Charset, mapname);
 	return Plugin_Handled;
 }
 
-public Action Bosses_MakeBossCmd(int client, int args)
+static Action Bosses_MakeBossCmd(int client, int args)
 {
 	if(args && args < 4)
 	{
@@ -192,7 +159,7 @@ public Action Bosses_MakeBossCmd(int client, int args)
 	return Plugin_Handled;
 }
 
-public Action Bosses_SetChargeCmd(int client, int args)
+static Action Bosses_SetChargeCmd(int client, int args)
 {
 	if(args && args < 4)
 	{
@@ -555,7 +522,7 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 	if(action != Plugin_Handled)
 	{
 		int i;
-		if(cfg.GetInt("version", i) && i != MAJOR_REVISION && i != 99)
+		if(cfg.GetInt("version", i) && i != 1 && i != 99)
 		{
 			if(i == 2)
 			{
@@ -568,27 +535,6 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 			
 			DeleteCfg(full);
 			return;
-		}
-		
-		if(cfg.GetInt("version_minor", i))
-		{
-			int stable = -1;
-			cfg.GetInt("version_stable", stable);
-			
-			if(i > MINOR_REVISION || (i == MINOR_REVISION && stable > STABLE_REVISION))
-			{
-				if(stable < 0)
-				{
-					LogError("[Boss] %s is only compatible with base FF2 v%d.%d and newer", character, MAJOR_REVISION, i);
-				}
-				else
-				{
-					LogError("[Boss] %s is only compatible with base FF2 v%d.%d.%d and newer", character, MAJOR_REVISION, i, stable);
-				}
-				
-				DeleteCfg(full);
-				return;
-			}
 		}
 		
 		if(cfg.GetInt("fversion", i) && i != 2)
@@ -815,7 +761,7 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 					}
 					case Section_Sound:
 					{
-						bool bgm = StrEqual(section, "sound_bgm");
+						bool bgm = (StrEqual(section, "sound_intromusic") || StrEqual(section, "sound_bgm"));
 						for(int a; a < entriessub; a++)
 						{
 							int length2 = snapsub.KeyBufferSize(a)+2;
@@ -831,7 +777,12 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 									{
 										ConfigMap cfgsound = val.cfg;
 										if(cfgsound)
-											music = view_as<bool>(cfgsound.GetInt("time", length2));
+										{
+											length2 = 0;
+											cfgsound.GetInt("time", length2);
+											if(length2)
+												music = true;
+										}
 									}
 									
 									if(StrContains(key, SndExts[0]) != -1 || StrContains(key, SndExts[1]) != -1)
@@ -850,7 +801,7 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 										PrecacheScriptSound(key);
 									}
 									
-									if(music)
+									if(music && val.cfg && val.cfg.ContainsKey("name"))
 										Music_AddSong(special, section, key);
 								}
 								case KeyValType_Value:
@@ -883,6 +834,9 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 											{
 												PrecacheScriptSound(key);
 											}
+
+											if(music)
+												Format(buffer2, sizeof(buffer2), "%sname", val.data);
 										}
 										else	// "1"	"example.mp3"
 										{
@@ -906,10 +860,16 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 											{
 												PrecacheScriptSound(buffer);
 											}
+
+											if(music)
+												Format(buffer2, sizeof(buffer2), "%sname", key);
 										}
 										
 										if(music)
-											Music_AddSong(special, section, key);
+										{
+											if(cfgsub.ContainsKey(buffer2))
+												Music_AddSong(special, section, key);
+										}
 									}
 								}
 							}
@@ -1135,7 +1095,7 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 											{
 												FormatEx(buffer, sizeof(buffer), "%s.%s", key, MdlExts[b]);
 												if(!check || FileExists(buffer, true))
-												{	
+												{
 													AddToStringTable(DownloadTable, buffer);
 												}
 												else if(b != sizeof(MdlExts)-1)
@@ -1335,6 +1295,103 @@ static void LoadCharacter(const char[] character, int charset, const char[] map,
 							cfg.Remove(section);
 						}
 					}
+					case Section_FileNet:
+					{
+						for(int a; a < entriessub; a++)
+						{
+							length = snapsub.KeyBufferSize(a)+1;
+							char[] key = new char[length];
+							snapsub.GetKey(a, key, length);
+							cfgsub.GetArray(key, val, sizeof(val));
+							
+							if(!key[0] || !IsNotExtraArg(key))
+							{
+								LogError("[Boss] '%s' has bad file '%s' in '%s'", character, key, section);
+								continue;
+							}
+							
+							switch(val.tag)
+							{
+								case KeyValType_Section:
+								{
+									if(!check || FileExists(key, true))
+									{
+										FileNet_AddFileToDownloads(key);
+									}
+									else
+									{
+										LogError("[Boss] '%s' is missing file '%s' in '%s'", character, key, section);
+									}
+								}
+								case KeyValType_Value:
+								{
+									if(length > val.size)	// "models/example"	"mdl"
+									{
+										if(val.data[1] == 'a')	// mat, material
+										{
+											for(int b; b < sizeof(MatExts); b++)
+											{
+												FormatEx(buffer, sizeof(buffer), "%s.%s", key, MatExts[b]);
+												if(!check || FileExists(buffer, true))
+												{
+													FileNet_AddFileToDownloads(buffer);
+												}
+												else
+												{
+													LogError("[Boss] '%s' is missing file '%s' in '%s'", character, buffer, section);
+												}
+											}
+											continue;
+										}
+										else if(val.data[1] == 'd' || val.data[1] == 'o')	// mdl, model
+										{
+											for(int b; b < sizeof(MdlExts); b++)
+											{
+												FormatEx(buffer, sizeof(buffer), "%s.%s", key, MdlExts[b]);
+												if(!check || FileExists(buffer, true))
+												{
+													FileNet_AddFileToDownloads(buffer);
+												}
+												else if(b != sizeof(MdlExts)-1)
+												{
+													LogError("[Boss] '%s' is missing file '%s' in '%s'", character, buffer, section);
+													break;
+												}
+											}
+										}
+										else
+										{
+											if(!check || FileExists(key, true))
+											{
+												FileNet_AddFileToDownloads(key);
+											}
+											else
+											{
+												LogError("[Boss] '%s' is missing file '%s' in '%s'", character, key, section);
+											}
+										}
+									}
+									else			// "1"	"sound/example.mp3"
+									{
+										if(!check || FileExists(val.data, true))
+										{
+											FileNet_AddFileToDownloads(val.data);
+										}
+										else
+										{
+											LogError("[Boss] '%s' is missing file '%s' in '%s'", character, val.data, section);
+										}
+									}
+								}
+							}
+						}
+						
+						if(clean)
+						{
+							DeleteCfg(cfgsub);
+							cfg.Remove(section);
+						}
+					}
 				}
 				
 				delete snapsub;
@@ -1479,6 +1536,14 @@ bool Bosses_CanAccessBoss(int client, int special, bool playing = false, int tea
 	if(enabled && (!cfg.GetBool("enabled", blocked) || !blocked))
 		return false;
 	
+	if(playing)
+	{
+		// Don't select duo bosses at random
+		int duo = -1;
+		if(cfg.GetInt("companion", duo) && duo != -1)
+			return false;
+	}
+	
 	cfg.GetBool("preview", preview, false);
 	
 	static char buffer1[512];
@@ -1583,6 +1648,8 @@ void Bosses_CreateFromConfig(int client, ConfigMap cfg, int team, int leader = 0
 			}
 		}
 	}
+
+	ConfigMap copy = cfg.Clone(ThisPlugin);
 	
 	if(Client(client).Cfg)
 	{
@@ -1593,7 +1660,7 @@ void Bosses_CreateFromConfig(int client, ConfigMap cfg, int team, int leader = 0
 	
 	EnableSubplugins();
 	
-	Client(client).Cfg = cfg.Clone(ThisPlugin);
+	Client(client).Cfg = copy;
 	
 	if(GetClientTeam(client) != team)
 		SDKCall_ChangeClientTeam(client, team);
@@ -1730,7 +1797,7 @@ void Bosses_Equip(int client)
 	CreateTimer(0.1, Bosses_EquipTimer, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 }
 
-public Action Bosses_EquipTimer(Handle timer, int userid)
+static Action Bosses_EquipTimer(Handle timer, int userid)
 {
 	int client = GetClientOfUserId(userid);
 	if(client && Client(client).IsBoss)
@@ -1749,10 +1816,10 @@ static void EquipBoss(int client, bool weapons)
 	switch(i)
 	{
 		case 0:
-			TF2Attrib_SetByDefIndex(client, 734, 0.0);
+			Attrib_Set(client, "healing received penalty", 0.0, _, true);
 								
 		case 1:
-			TF2Attrib_SetByDefIndex(client, 740, 0.0);
+			Attrib_Set(client, "reduced_healing_from_medics", 0.0, _, true);
 	}
 	
 	any class;
@@ -1794,11 +1861,12 @@ static void EquipBoss(int client, bool weapons)
 	}
 	
 	static char buffer[PLATFORM_MAX_PATH];
-	if(Client(client).Cfg.Get("model", buffer, sizeof(buffer)))
-	{
+	if (Client(client).Cfg.Get("model", buffer, sizeof(buffer)))
 		SetVariantString(buffer);
-		AcceptEntityInput(client, "SetCustomModelWithClassAnimations");
-	}
+	else
+		SetVariantString("");
+
+	AcceptEntityInput(client, "SetCustomModelWithClassAnimations");
 	
 	if(weapons)
 	{
@@ -1807,308 +1875,19 @@ static void EquipBoss(int client, bool weapons)
 		int entries = snap.Length;
 		if(entries)
 		{
-			value = false;
+			value = true;
 			PackVal val;
 			for(i = 0; i < entries; i++)
 			{
-				static char classname[36];
-				snap.GetKey(i, classname, sizeof(classname));
+				int length = snap.KeyBufferSize(i)+1;
+				char[] classname = new char[length];
+				snap.GetKey(i, classname, length);
 				Client(client).Cfg.GetArray(classname, val, sizeof(val));
 				if(val.tag != KeyValType_Section || GetSectionType(classname) != Section_Weapon)
 					continue;
 				
-				ConfigMap cfg = val.cfg;
-				if(!cfg)
-					continue;
-				
-				if(StrContains(classname, "tf_") != 0 &&
-				  !StrEqual(classname, "saxxy"))
-				{
-					if(!cfg.Get("name", classname, sizeof(classname)))
-						strcopy(classname, sizeof(classname), "tf_wearable");
-				}
-				
-				GetClassWeaponClassname(class, classname, sizeof(classname));
-				bool wearable = StrContains(classname, "tf_weap") != 0;
-				
-				cfg.GetInt("index", index);
-				
-				int level = -1;
-				cfg.GetInt("level", level);
-				
-				int quality = 5;
-				cfg.GetInt("quality", quality);
-				
-				bool preserve;
-				cfg.GetBool("preserve", preserve, false);
-				
-				bool override;
-				cfg.GetBool("override", override, false);
-				
-				int kills = -1;
-				if(!cfg.GetInt("rank", kills) && level == -1 && !override)
-					kills = GetURandomInt() % 21;
-				
-				if(kills >= 0)
-					kills = wearable ? GetKillsOfCosmeticRank(kills, index) : GetKillsOfWeaponRank(kills, index);
-				
-				if(level < 0 || level > 127)
-					level = 101;
-				
-				TFClassType forceClass;
-				if(cfg.Get("class", buffer, sizeof(buffer)))
-					forceClass = GetClassOfName(buffer);
-				
-				if(forceClass != TFClass_Unknown)
-					TF2_SetPlayerClass(client, forceClass, _, false);
-				
-				bool found = (cfg.GetKeyValType("attributes") == KeyValType_Value && cfg.Get("attributes", buffer, sizeof(buffer)) && buffer[0]);
-				
-				if(!wearable && !override)
-				{
-					if(value)
-					{
-						if(found)
-						{
-							Format(buffer, sizeof(buffer), "2 ; 3.1 ; %s", buffer);
-						}
-						else
-						{
-							strcopy(buffer, sizeof(buffer), "2 ; 3.1");
-						}
-					}
-					else if(found)
-					{
-						Format(buffer, sizeof(buffer), "2 ; 3.1 ; 275 ; 1 ; %s", buffer);
-					}
-					else
-					{
-						strcopy(buffer, sizeof(buffer), "2 ; 3.1 ; 275 ; 1");
-					}
-				}
-				else if(!found)
-				{
-					buffer[0] = 0;
-				}
-				
-				static char buffers[40][16];
-				int count = ExplodeString(buffer, " ; ", buffers, sizeof(buffers), sizeof(buffers));
-				
-				if(count % 2)
-					count--;
-				
-				int attribs;
-				int entity = -1;
-				if(wearable)
-				{
-					entity = CreateEntityByName(classname);
-					if(IsValidEntity(entity))
-					{
-						SetEntProp(entity, Prop_Send, "m_iItemDefinitionIndex", index);
-						SetEntProp(entity, Prop_Send, "m_bInitialized", true);
-						SetEntProp(entity, Prop_Send, "m_iEntityQuality", quality);
-						SetEntProp(entity, Prop_Send, "m_iEntityLevel", level);
-						
-						DispatchSpawn(entity);
-						
-						Debug("Created Wearable");
-					}
-					else
-					{
-						Client(client).Cfg.Get("filename", buffer, sizeof(buffer));
-						LogError("[Boss] Invalid classname '%s' for '%s'", classname, buffer);
-					}
-				}
-				else
-				{
-					Handle item = TF2Items_CreateItem(preserve ? (OVERRIDE_ALL|FORCE_GENERATION|PRESERVE_ATTRIBUTES) : (OVERRIDE_ALL|FORCE_GENERATION));
-					TF2Items_SetClassname(item, classname);
-					TF2Items_SetItemIndex(item, index);
-					TF2Items_SetLevel(item, level);
-					TF2Items_SetQuality(item, quality);
-					TF2Items_SetNumAttributes(item, count/2 > 14 ? 15 : count/2);
-					for(int a; attribs < count && a < 16; attribs += 2)
-					{
-						int attrib = StringToInt(buffers[attribs]);
-						if(attrib)
-						{
-							TF2Items_SetAttribute(item, a++, attrib, StringToFloat(buffers[attribs+1]));
-						}
-						else
-						{
-							Client(client).Cfg.Get("filename", buffer, sizeof(buffer));
-							LogError("[Boss] Bad weapon attribute passed for '%s' on '%s': %s ; %s", buffer, classname, buffers[attribs], buffers[attribs+1]);
-						}
-					}
-					
-					entity = TF2Items_GiveNamedItem(client, item);
-					delete item;
-				}
-				
-				if(entity != -1)
-				{
-					if(wearable)
-					{
-						TF2U_EquipPlayerWearable(client, entity);
-					}
-					else
-					{
-						EquipPlayerWeapon(client, entity);
-					}
-					
-					if(forceClass != TFClass_Unknown)
-						TF2_SetPlayerClass(client, class, _, false);
-					
-					switch(cfg.GetKeyValType("attributes"))
-					{
-						case KeyValType_Value:
-						{
-							for(; attribs < count; attribs += 2)
-							{
-								int attrib = StringToInt(buffers[attribs]);
-								if(attrib)
-								{
-									TF2Attrib_SetByDefIndex(entity, attrib, StringToFloat(buffers[attribs+1]));
-								}
-								else
-								{
-									Client(client).Cfg.Get("filename", buffer, sizeof(buffer));
-									LogError("[Boss] Bad weapon attribute passed for '%s' on '%s': %s ; %s", buffer, classname, buffers[attribs], buffers[attribs+1]);
-								}
-							}
-						}
-						case KeyValType_Section:
-						{
-							ConfigMap cfgAttributes = cfg.GetSection("attributes");
-
-							StringMapSnapshot attributeListSnap = cfgAttributes.Snapshot();
-							int attributeListSnapLength = attributeListSnap.Length;
-
-							PackVal attributeValue;
-
-							for(attribs = 0; attribs < attributeListSnapLength; attribs++)
-							{
-								int length = attributeListSnap.KeyBufferSize(attribs) + 1;
-								char[] key = new char[length];
-
-								attributeListSnap.GetKey(attribs, key, length);
-								
-								cfgAttributes.GetArray(key, attributeValue, sizeof(attributeValue));
-
-								if(attributeValue.tag == KeyValType_Value)
-								{
-									TF2Attrib_SetFromStringValue(entity, key, attributeValue.data);
-								}
-							}
-
-							delete attributeListSnap;
-						}
-					}
-					
-					ConfigMap custom = cfg.GetSection("custom");
-					if(custom)
-						Weapons_ApplyCustomAttributes(entity, custom);
-					
-					if(kills >= 0)
-					{
-						TF2Attrib_SetByDefIndex(entity, 214, view_as<float>(kills));
-						if(wearable)
-							TF2Attrib_SetByDefIndex(entity, 454, view_as<float>(64));
-					}
-					
-					if(!wearable)
-					{
-						if(cfg.GetInt("clip", level))
-							SetEntProp(entity, Prop_Data, "m_iClip1", level);
-						
-						if(cfg.GetInt("ammo", level))
-						{
-							int type = GetEntProp(entity, Prop_Send, "m_iPrimaryAmmoType");
-							if(type >= 0)
-								SetEntProp(client, Prop_Data, "m_iAmmo", level, _, type);
-						}
-						
-						if(index != 735 && StrEqual(classname, "tf_weapon_builder"))
-						{
-							for(level = 0; level < 4; level++)
-							{
-								SetEntProp(entity, Prop_Send, "m_aBuildableObjectTypes", level != 3, _, level);
-							}
-						}
-						else if(index == 735 || StrEqual(classname, "tf_weapon_sapper"))
-						{
-							SetEntProp(entity, Prop_Send, "m_iObjectType", 3);
-							SetEntProp(entity, Prop_Data, "m_iSubType", 3);
-							
-							for(level = 0; level < 4; level++)
-							{
-								SetEntProp(entity, Prop_Send, "m_aBuildableObjectTypes", level == 3, _, level);
-							}
-						}
-					}
-
-					override = wearable;
-					cfg.GetBool("show", override, false);
-					if(override)
-					{
-						if(cfg.GetInt("worldmodel", index) && index)
-						{
-							if(!wearable)
-								SetEntProp(entity, Prop_Send, "m_iWorldModelIndex", index);
-							
-							for(level = 0; level < 4; level++)
-							{
-								SetEntProp(entity, Prop_Send, "m_nModelIndexOverrides", index, _, level);
-							}
-						}
-						
-						GetEntityNetClass(entity, classname, sizeof(classname));
-						int offset = FindSendPropInfo(classname, "m_iItemIDHigh");
-						
-						SetEntData(entity, offset - 8, 0);	// m_iItemID
-						SetEntData(entity, offset - 4, 0);	// m_iItemID
-						SetEntData(entity, offset, 0);		// m_iItemIDHigh
-						SetEntData(entity, offset + 4, 0);	// m_iItemIDLow
-						
-						SetEntProp(entity, Prop_Send, "m_bValidatedAttachedEntity", true);
-					}
-					else if(!wearable)
-					{
-						SetEntityRenderMode(entity, RENDER_ENVIRONMENTAL);
-					}
-					
-					level = 255;
-					index = 255;
-					kills = 255;
-					count = 255;
-					
-					override = view_as<bool>(cfg.GetInt("alpha", level));
-					override = (cfg.GetInt("red", index) || override);
-					override = (cfg.GetInt("green", kills) || override);
-					override = (cfg.GetInt("blue", count) || override);
-					
-					if(override)
-					{
-						SetEntityRenderMode(entity, RENDER_TRANSCOLOR);
-						SetEntityRenderColor(entity, index, kills, count, level);
-					}
-					
-					SetEntProp(entity, Prop_Send, "m_iAccountID", GetSteamAccountID(client, false));
-					
-					if(!wearable && !value)
-					{
-						level = TF2_GetClassnameSlot(classname);
-						if(level >= TFWeaponSlot_Primary && level <= TFWeaponSlot_Melee)
-						{
-							value = true;
-							SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", entity);
-						}
-					}
-				}
-				else if(forceClass != TFClass_Unknown)
-				{
-					TF2_SetPlayerClass(client, class, _, false);
-				}
+				if(val.cfg)
+					TF2Items_CreateFromCfg(client, classname, val.cfg, value);
 			}
 		}
 		
@@ -2142,11 +1921,11 @@ void Bosses_UpdateHealth(int client)
 				defaul = 150;
 		}
 		
-		TF2Attrib_SetByDefIndex(client, 26, float(maxhealth-defaul));
+		Attrib_Set(client, "max health additive bonus", float(maxhealth-defaul), _, true);
 	}
 	else
 	{
-		TF2Attrib_SetByDefIndex(client, 26, 0.0);
+		Attrib_Set(client, "max health additive bonus", 0.0, _, true);
 	}
 }
 
@@ -2204,12 +1983,23 @@ void Bosses_SetSpeed(int client)
 			}
 		}
 		
-		TF2Attrib_SetByDefIndex(client, 442, speed/defaul);
+		Attrib_Set(client, "major move speed bonus", speed / defaul, _, true);
 		SDKCall_SetSpeed(client);
 	}
 	else
 	{
-		TF2Attrib_SetByDefIndex(client, 442, 1.0);
+		Attrib_Set(client, "major move speed bonus", 1.0, _, true);
+	}
+}
+
+void Bosses_OnConditonAdded(int client, TFCond cond)
+{
+	if(Client(client).IsBoss && (cond == TFCond_Jarated || cond == TFCond_Bleeding || cond == TFCond_OnFire || cond == TFCond_Gas))
+	{
+		int flags = GetCommandFlags("r_screenoverlay");
+		SetCommandFlags("r_screenoverlay", flags & ~FCVAR_CHEAT);
+		ClientCommand(client, "r_screenoverlay \"\"");
+		SetCommandFlags("r_screenoverlay", flags);
 	}
 }
 
@@ -2275,10 +2065,10 @@ void Bosses_Remove(int client)
 		SetVariantString(NULL_STRING);
 		AcceptEntityInput(client, "SetCustomModelWithClassAnimations");
 		
-		TF2Attrib_SetByDefIndex(client, 442, 1.0);
-		TF2Attrib_SetByDefIndex(client, 26, 0.0);
-		TF2Attrib_SetByDefIndex(client, 734, 1.0);
-		TF2Attrib_SetByDefIndex(client, 740, 1.0);
+		Attrib_Remove(client, "major move speed bonus");
+		Attrib_Remove(client, "max health additive bonus");
+		Attrib_Remove(client, "healing received penalty");
+		Attrib_Remove(client, "reduced_healing_from_medics");
 		
 		TF2_RemoveAllItems(client);
 		if(IsPlayerAlive(client))
@@ -2301,66 +2091,114 @@ int Bosses_GetBossTeam()
 
 void Bosses_PlayerRunCmd(int client, int buttons)
 {
-	if((!Enabled || RoundStatus == 1) && Client(client).IsBoss && IsPlayerAlive(client))
+	if((!Enabled || RoundStatus == 1) && IsPlayerAlive(client))
 	{
 		float time = GetGameTime();
-		if(Client(client).PassiveAt <= time)
+
+		if(Client(client).HoldingButton & IN_ATTACK)
 		{
-			Client(client).PassiveAt = time + 0.2;
-			Bosses_UseSlot(client, 1, 3);
+			if(!(buttons & IN_ATTACK))
+				Client(client).HoldingButton &= ~IN_ATTACK;
+		}
+		else if(buttons & IN_ATTACK)
+		{
+			Client(client).HoldingButton |= IN_ATTACK;
+
+			if(Client(client).SapperCooldownFor < time)
+			{
+				int weapon = GetEntPropEnt(client, Prop_Send, "m_hActiveWeapon");
+				if(weapon != -1 && HasEntProp(weapon, Prop_Send, "m_iObjectType") && GetEntProp(weapon, Prop_Send, "m_iObjectType") == view_as<int>(TFObject_Sapper))
+				{
+					int target = GetClientAimTarget(client, true);
+					if(target != -1)
+					{
+ 						if(Client(target).IsBoss && IsPlayerAlive(target) && (GetClientTeam(client) != GetClientTeam(target) || Cvar[FriendlyFire].BoolValue))
+						{
+							float pos1[3], pos2[3];
+							GetClientAbsOrigin(client, pos1);
+							GetClientAbsOrigin(target, pos2);
+							if (GetVectorDistance(pos1, pos2, true) < SAPPER_MAX_DISTANCE_SQAURE)
+							{
+								TF2_AddCondition(target, TFCond_Sapped, 4.0);
+								Client(client).SapperCooldownFor = time + 15.0;
+							}
+						}
+					}
+				}
+			}
 		}
 		
-		if(!Client(client).NoHud && !(buttons & IN_SCORE))
+		if(Client(client).IsBoss)
 		{
-			time = GetEngineTime();
-			if(Client(client).RefreshAt < time)
+			if(Client(client).PassiveAt <= time)
 			{
-				Client(client).RefreshAt = time + 0.2;
-				
-				SetGlobalTransTarget(client);
-				
-				static char buffer[256];
-				int maxlives = Client(client).MaxLives;
-				if(maxlives > 1)
+				Client(client).PassiveAt = time + 0.2;
+				Bosses_UseSlot(client, 1, 3);
+			}
+			
+			if(!Client(client).NoHud && !(buttons & IN_SCORE))
+			{
+				time = GetEngineTime();
+				if(Client(client).RefreshAt < time)
 				{
-					Format(buffer, sizeof(buffer), "%t", "Boss Lives Left", Client(client).Lives, maxlives);
-				}
-				else
-				{
-					buffer[0] = ' ';
-					buffer[1] = 0;
-				}
-				
-				float ragedamage = Client(client).RageDamage;
-				if(ragedamage >= 0.0 && ragedamage < 99999.0)
-				{
-					float rage = Client(client).GetCharge(0);
-					float ragemin = Client(client).RageMin;
-					if(rage >= ragemin)
+					Client(client).RefreshAt = time + 0.2;
+					
+					SetGlobalTransTarget(client);
+					
+					static char buffer[256];
+					int maxlives = Client(client).MaxLives;
+					if(maxlives > 1)
 					{
-						SetHudTextParams(-1.0, 0.78, 0.35, 255, 64, 64, 255, _, _, 0.01, 0.5);
-						Format(buffer, sizeof(buffer), "%s\n%t", buffer, "Boss Rage Ready", RoundToFloor(rage));
+						Format(buffer, sizeof(buffer), "%t", "Boss Lives Left", Client(client).Lives, maxlives);
 					}
 					else
 					{
-						SetHudTextParams(-1.0, 0.78, 0.35, 255, 255, 255, 255, _, _, 0.01, 0.5);
-						Format(buffer, sizeof(buffer), "%s\n%t", buffer, "Boss Rage Charge", RoundToFloor(rage));
+						buffer[0] = ' ';
+						buffer[1] = 0;
 					}
 					
-					if(rage < ragemin || Client(client).RageMode == 2)
+					float ragedamage = Client(client).RageDamage;
+					if(ragedamage >= 0.0 && ragedamage < 99999.0)
 					{
+						float rage = Client(client).GetCharge(0);
+						float ragemin = ragedamage <= 1.0 ? -FAR_FUTURE : Client(client).RageMin;
+						if(rage >= ragemin)
+						{
+							SetHudTextParams(-1.0, 0.78, 0.35, 255, 64, 64, 255, _, _, 0.01, 0.5);
+							Format(buffer, sizeof(buffer), "%s\n%t", buffer, "Boss Rage Ready", RoundToFloor(rage));
+						}
+						else
+						{
+							SetHudTextParams(-1.0, 0.78, 0.35, 255, 255, 255, 255, _, _, 0.01, 0.5);
+							Format(buffer, sizeof(buffer), "%s\n%t", buffer, "Boss Rage Charge", RoundToFloor(rage));
+						}
+						
+						if(rage < ragemin || Client(client).RageMode == 2)
+						{
+							ShowSyncHudText(client, PlayerHud, buffer);
+						}
+						else
+						{
+							ShowSyncHudText(client, PlayerHud, "%s%t", buffer, "Boss Rage Medic");
+						}
+					}
+					else if(buffer[1])
+					{
+						SetHudTextParams(-1.0, 0.78, 0.35, 255, 255, 255, 255, _, _, 0.01, 0.5);
 						ShowSyncHudText(client, PlayerHud, buffer);
 					}
-					else
-					{
-						ShowSyncHudText(client, PlayerHud, "%s%t", buffer, "Boss Rage Medic");
-					}
 				}
-				else if(buffer[1])
-				{
-					SetHudTextParams(-1.0, 0.78, 0.35, 255, 255, 255, 255, _, _, 0.01, 0.5);
-					ShowSyncHudText(client, PlayerHud, buffer);
-				}
+			}
+		}
+		else if(Client(client).SapperCooldownFor > time && !Client(client).NoHud && !(buttons & IN_SCORE))
+		{
+			float engineTime = GetEngineTime();
+			if(Client(client).RefreshAt < engineTime)
+			{
+				Client(client).RefreshAt = engineTime + 0.2;
+				
+				SetHudTextParams(-1.0, 0.88, 0.35, 90, 255, 90, 255, 0, 0.35, 0.0, 0.1);
+				ShowSyncHudText(client, PlayerHud, "%t", "Sapper Cooldown", 100 - RoundToCeil((Client(client).SapperCooldownFor - time) / 0.15));
 			}
 		}
 	}
@@ -2375,7 +2213,7 @@ void Bosses_UseSlot(int client, int low, int high)
 		{
 			IntToString(slot, buffer, sizeof(buffer));
 			
-			if(!Bosses_PlaySoundToAll(client, "sound_ability_serverwide", buffer, _, _, _, _, 2.0) && Cvar[SoundType].BoolValue)
+			if(!Bosses_PlaySoundToAll(client, "sound_ability_serverwide", buffer, _, _, _, _, 2.0) && !MultiBosses())
 			{
 				Bosses_PlaySoundToAll(client, "sound_ability", buffer, _, _, _, _, 2.0);
 			}
@@ -2580,7 +2418,7 @@ static void UseAbility(int client, ConfigMap cfg, const char[] plugin, const cha
 	Forward_OnAbilityPost(client, ability, cfg);
 }
 
-public Action Bosses_UseBossCharge(Handle timer, DataPack data)
+static Action Bosses_UseBossCharge(Handle timer, DataPack data)
 {
 	data.Reset();
 	int client = data.ReadCell();
@@ -2782,7 +2620,21 @@ int Bosses_GetRandomSoundCfg(ConfigMap full, const char[] section, SoundEnum sou
 						}
 						
 						if(cfgsub.Get("overlay", sound.Overlay, sizeof(sound.Overlay)))
+						{
 							cfgsub.GetFloat("duration", sound.Duration);
+							
+							if(!cfgsub.GetInt("__overlayfn", sound.OverlayFileNet))
+							{
+								sound.OverlayFileNet = FileNet_FileProgress(sound.Overlay);
+								cfgsub.SetInt("__overlayfn", sound.OverlayFileNet);
+							}
+						}
+						
+						if(!cfgsub.GetInt("__filenet", sound.FileNet))
+						{
+							sound.FileNet = FileNet_SoundProgress(sound.Sound);
+							cfgsub.SetInt("__filenet", sound.FileNet);
+						}
 					}
 					case KeyValType_Value:
 					{
@@ -2797,6 +2649,8 @@ int Bosses_GetRandomSoundCfg(ConfigMap full, const char[] section, SoundEnum sou
 							{
 								size = strcopy(sound.Sound, sizeof(sound.Sound), key);
 							}
+
+							sound.FileNet = FileNet_SoundProgress(sound.Sound);
 						}
 						else	// "1"	"example.mp3"
 						{
@@ -2807,6 +2661,8 @@ int Bosses_GetRandomSoundCfg(ConfigMap full, const char[] section, SoundEnum sou
 							{
 								Format(sound.Sound, sizeof(sound.Sound), "%s_overlay_time", key);
 								cfg.GetFloat(sound.Sound, sound.Duration);
+								
+								sound.OverlayFileNet = FileNet_FileProgress(sound.Overlay);
 							}
 							
 							Format(sound.Sound, sizeof(sound.Sound), "time%s", key);
@@ -2838,6 +2694,8 @@ int Bosses_GetRandomSoundCfg(ConfigMap full, const char[] section, SoundEnum sou
 								if(GetGameSoundParams(sound.Sound, sound.Channel, sound.Level, sound.Volume, sound.Pitch, sound.Sound, sizeof(sound.Sound), sound.Entity == SOUND_FROM_LOCAL_PLAYER ? SOUND_FROM_PLAYER : sound.Entity))
 									size = strlen(sound.Sound);
 							}
+
+							sound.FileNet = FileNet_SoundProgress(sound.Sound);
 						}
 					}
 				}
@@ -2900,7 +2758,21 @@ int Bosses_GetSpecificSoundCfg(ConfigMap full, const char[] section, char[] key,
 				}
 				
 				if(cfgsub.Get("overlay", sound.Overlay, sizeof(sound.Overlay)))
+				{
 					cfgsub.GetFloat("duration", sound.Duration);
+
+					if(!cfgsub.GetInt("__overlayfn", sound.OverlayFileNet))
+					{
+						sound.OverlayFileNet = FileNet_FileProgress(sound.Overlay);
+						cfgsub.SetInt("__overlayfn", sound.OverlayFileNet);
+					}
+				}
+				
+				if(!cfgsub.GetInt("__filenet", sound.FileNet))
+				{
+					sound.FileNet = FileNet_SoundProgress(sound.Sound);
+					cfgsub.SetInt("__filenet", sound.FileNet);
+				}
 			}
 			case KeyValType_Value:
 			{
@@ -2915,6 +2787,8 @@ int Bosses_GetSpecificSoundCfg(ConfigMap full, const char[] section, char[] key,
 					{
 						size = strcopy(sound.Sound, sizeof(sound.Sound), key);
 					}
+
+					sound.FileNet = FileNet_SoundProgress(sound.Sound);
 				}
 				else	// "1"	"example.mp3"
 				{
@@ -2925,6 +2799,8 @@ int Bosses_GetSpecificSoundCfg(ConfigMap full, const char[] section, char[] key,
 					{
 						Format(sound.Sound, sizeof(sound.Sound), "%s_overlay_time", key);
 						cfg.GetFloat(sound.Sound, sound.Duration);
+						
+						sound.OverlayFileNet = FileNet_FileProgress(sound.Overlay);
 					}
 					
 					Format(sound.Sound, sizeof(sound.Sound), "time%s", key);
@@ -2956,6 +2832,8 @@ int Bosses_GetSpecificSoundCfg(ConfigMap full, const char[] section, char[] key,
 						if(GetGameSoundParams(sound.Sound, sound.Channel, sound.Level, sound.Volume, sound.Pitch, sound.Sound, sizeof(sound.Sound), sound.Entity == SOUND_FROM_LOCAL_PLAYER ? SOUND_FROM_PLAYER : sound.Entity))
 							size = strlen(sound.Sound);
 					}
+
+					sound.FileNet = FileNet_SoundProgress(sound.Sound);
 				}
 			}
 		}
@@ -2982,7 +2860,7 @@ bool Bosses_PlaySound(int boss, const int[] clients, int numClients, const char[
 	
 	if(sound.Time > 0)
 	{
-		Music_PlaySong(clients, numClients, sound.Sound, GetClientUserId(boss), sound.Name, sound.Artist, sound.Time, sound.Volume, sound.Pitch);
+		Music_PlaySong(clients, numClients, sound, GetClientUserId(boss));
 	}
 	else
 	{
@@ -2991,7 +2869,7 @@ bool Bosses_PlaySound(int boss, const int[] clients, int numClients, const char[
 		
 		for(int i; i < numClients; i++)
 		{
-			if(!Client(clients[i]).NoVoice)
+			if(!Client(clients[i]).NoVoice && FileNet_HasFile(clients[i], sound.FileNet))
 				clients2[amount++] = clients[i];
 		}
 		
@@ -3016,20 +2894,16 @@ bool Bosses_PlaySound(int boss, const int[] clients, int numClients, const char[
 	if(sound.Overlay[0])
 	{
 		sound.Duration += GetEngineTime();
-		
-		int cflags = GetCommandFlags("r_screenoverlay");
-		SetCommandFlags("r_screenoverlay", cflags & ~FCVAR_CHEAT);
-		
+		SetVariantString(sound.Overlay);
+
 		for(int i; i < numClients; i++)
 		{
-			if(clients[i] != boss)
+			if(clients[i] != boss && FileNet_HasFile(clients[i], sound.OverlayFileNet))
 			{
 				Client(clients[i]).OverlayFor = sound.Duration;
-				ClientCommand(clients[i], "r_screenoverlay \"%s\"", sound.Overlay);
+				AcceptEntityInput(clients[i], "SetScriptOverlayMaterial", clients[i], clients[i]);
 			}
 		}
-		
-		SetCommandFlags("r_screenoverlay", cflags);
 	}
 	return true;
 }
@@ -3145,7 +3019,7 @@ static bool IsSubpluginLoaded(const char[] name)
 	return false;
 }
 
-public void Bosses_RenameSubplugin(DataPack pack)
+static void Bosses_RenameSubplugin(DataPack pack)
 {
 	pack.Reset();
 	

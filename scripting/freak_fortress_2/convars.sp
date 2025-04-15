@@ -1,10 +1,3 @@
-/*
-	void ConVar_PluginStart()
-	void ConVar_ConfigsExecuted()
-	void ConVar_Enable()
-	void ConVar_Disable()
-*/
-
 #pragma semicolon 1
 #pragma newdecls required
 
@@ -41,13 +34,14 @@ void ConVar_PluginStart()
 	Cvar[CaptureAlive] = CreateConVar("ff2_game_capture_alive", "n/5", "Amount of players left alive until the control point unlocks, can be a formula");
 	Cvar[AggressiveSwap] = CreateConVar("ff2_aggressive_noswap", "0", "Block bosses changing teams, even from other plugins.\nOnly use if you have subplugin issues swapping teams, even then you should fix them anyways", _, true, 0.0, true, 1.0);
 	Cvar[AggressiveOverlay] = CreateConVar("ff2_aggressive_overlay", "0", "Force clears overlays on death and round end.\nOnly use if you have subplugin issues not cleaing overlays, even then you should fix them anyways", _, true, 0.0, true, 1.0);
-	Cvar[SoundType] = CreateConVar("ff2_boss_globalsounds", "0", "If default sounds are globally heard", _, true, 0.0, true, 1.0);
 	Cvar[DisguiseModels] = CreateConVar("ff2_game_disguises", "1", "If to use rome vision to apply custom models to disguises.\nCan't modifiy cvar value while players are active.", _, true, 0.0, true, 1.0);
 	Cvar[PlayerGlow] = CreateConVar("ff2_game_last_glow", "1", "If the final mercenary of a team will be highlighted.", _, true, 0.0, true, 1.0);
 	Cvar[PrefSpecial] = CreateConVar("ff2_pref_special", "0.0", "If non-zero, difficulties will be randomly applied onto a boss based on the chance set.", FCVAR_NOTIFY, true, 0.0, true, 1.0);
 	Cvar[Telefrags] = CreateConVar("ff2_game_telefrag", "5000", "How much damage telefrags do on bosses");
 	Cvar[SubpluginFolder] = CreateConVar("ff2_plugin_subplugins", "freaks", "Folder to load/unload when bosses are at play relative to the plugins folder.");
 	Cvar[FileCheck] = CreateConVar("ff2_plugin_checkfiles", "1", "If to check and warn about missing files from bosses. (Disabling this can help load times.)", _, true, 0.0, true, 1.0);
+	Cvar[PackVotes] = CreateConVar("ff2_plugin_packvotes", "1", "If to host a boss pack vote when the next map is set.", _, true, 0.0, true, 1.0);
+	Cvar[StreakDamage] = CreateConVar("ff2_game_streakdamage", "400", "Amount of damage against a boss to display as a kill.", _, true, 1.0);
 	
 	CreateConVar("ff2_oldjump", "1", "Backwards Compatibility ConVar", FCVAR_DONTRECORD|FCVAR_HIDDEN, true, 0.0, true, 1.0);
 	CreateConVar("ff2_base_jumper_stun", "0", "Backwards Compatibility ConVar", FCVAR_DONTRECORD|FCVAR_HIDDEN, true, 0.0, true, 1.0);
@@ -56,9 +50,9 @@ void ConVar_PluginStart()
 	AutoExecConfig(false, "FF2Rewrite");
 	
 	Cvar[AllowSpectators] = FindConVar("mp_allowspectators");
+	Cvar[FriendlyFire] = FindConVar("mp_friendlyfire");
 	Cvar[MovementFreeze] = FindConVar("tf_player_movement_restart_freeze");
 	Cvar[PreroundTime] = FindConVar("tf_arena_preround_time");
-	//Cvar[BonusRoundTime] = FindConVar("mp_bonusroundtime");
 	Cvar[Tournament] = FindConVar("mp_tournament");
 	Cvar[WaitingTime] = FindConVar("mp_waitingforplayers_time");
 	
@@ -180,18 +174,6 @@ static void ConVar_Add(const char[] name, const char[] value, bool enforce = tru
 	CvarList.PushArray(info);
 }
 
-public void ConVar_OnlyChangeOnEmpty(ConVar cvar, const char[] oldValue, const char[] newValue)
-{
-	for(int client = 1; client <= MaxClients; client++)
-	{
-		if(IsClientInGame(client))
-		{
-			cvar.SetString(oldValue);
-			break;
-		}
-	}
-}
-
 stock void ConVar_Remove(const char[] name)
 {
 	ConVar cvar = FindConVar(name);
@@ -261,7 +243,7 @@ void ConVar_Disable()
 	}
 }
 
-public void ConVar_OnChanged(ConVar cvar, const char[] oldValue, const char[] newValue)
+static void ConVar_OnChanged(ConVar cvar, const char[] oldValue, const char[] newValue)
 {
 	int index = CvarList.FindValue(cvar, CvarInfo::cvar);
 	if(index != -1)

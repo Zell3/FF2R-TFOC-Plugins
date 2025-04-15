@@ -1,15 +1,8 @@
-/*
-	void Database_PluginStart()
-	void Database_PluginEnd()
-	void Database_ClientPostAdminCheck(int client)
-	void Database_ClientDisconnect(int client, DBPriority prioity = DBPrio_Normal)
-*/
-
 #pragma semicolon 1
 #pragma newdecls required
 
 #define DATABASE				"ff2"
-#define DATATABLE_GENERAL		"ff2_data_v3"
+#define DATATABLE_GENERAL		"ff2_data_v4"
 #define DATATABLE_LISTING		"ff2_listing_v1"
 #define DATATABLE_DIFFICULTY	"ff2_difficulty_v1"
 
@@ -34,7 +27,7 @@ void Database_PluginStart()
 	}
 }
 
-public void Database_Connected(Database db, const char[] error, any data)
+static void Database_Connected(Database db, const char[] error, any data)
 {
 	if(db)
 	{
@@ -47,7 +40,8 @@ public void Database_Connected(Database db, const char[] error, any data)
 		... "toggle_voice INTEGER NOT NULL DEFAULT 1, "
 		... "weapon_changes INTEGER NOT NULL DEFAULT 1, "
 		... "damage_hud INTEGER NOT NULL DEFAULT 1, "
-		... "last_played TEXT NOT NULL DEFAULT '');");
+		... "last_played TEXT NOT NULL DEFAULT '', "
+		... "loadout TEXT NOT NULL DEFAULT '');");
 		
 		tr.AddQuery("CREATE TABLE IF NOT EXISTS " ... DATATABLE_LISTING ... " ("
 		... "steamid INTEGER NOT NULL, "
@@ -65,7 +59,7 @@ public void Database_Connected(Database db, const char[] error, any data)
 	}
 }
 
-public Action Database_SteamIdCmd(int args)
+static Action Database_SteamIdCmd(int args)
 {
 	if(args)
 	{
@@ -94,7 +88,7 @@ public Action Database_SteamIdCmd(int args)
 	return Plugin_Handled;
 }
 
-public Action Database_QueryCmd(int args)
+static Action Database_QueryCmd(int args)
 {
 	char buffer[1024];
 	GetCmdArgString(buffer, sizeof(buffer));
@@ -107,7 +101,7 @@ public Action Database_QueryCmd(int args)
 	return Plugin_Handled;
 }
 
-public void Database_QueryCallback(Database db, any data, int numQueries, DBResultSet[] results, any[] queryData)
+static void Database_QueryCallback(Database db, any data, int numQueries, DBResultSet[] results, any[] queryData)
 {
 	PrintToServer("Success");
 	
@@ -126,12 +120,12 @@ public void Database_QueryCallback(Database db, any data, int numQueries, DBResu
 	}
 }
 
-public void Database_QueryFail(Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData)
+static void Database_QueryFail(Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData)
 {
 	PrintToServer(error);
 }
 
-public void Database_SetupCallback(Database db, any data, int numQueries, DBResultSet[] results, any[] queryData)
+static void Database_SetupCallback(Database db, any data, int numQueries, DBResultSet[] results, any[] queryData)
 {
 	DataBase = data;
 	for(int client = 1; client <= MaxClients; client++)
@@ -179,7 +173,7 @@ void Database_ClientPostAdminCheck(int client)
 	}
 }
 
-public void Database_ClientSetup(Database db, int userid, int numQueries, DBResultSet[] results, any[] queryData)
+static void Database_ClientSetup(Database db, int userid, int numQueries, DBResultSet[] results, any[] queryData)
 {
 	int client = GetClientOfUserId(userid);
 	if(client)
@@ -194,6 +188,8 @@ public void Database_ClientSetup(Database db, int userid, int numQueries, DBResu
 			Client(client).NoDmgHud = !results[0].FetchInt(5);
 			results[0].FetchString(6, buffer, sizeof(buffer));
 			Client(client).SetLastPlayed(buffer);
+			results[0].FetchString(7, buffer, sizeof(buffer));
+			Client(client).SetLoadout(buffer);
 			
 			int value = results[0].FetchInt(2);
 			Client(client).MusicShuffle = value > 1;
@@ -249,8 +245,9 @@ void Database_ClientDisconnect(int client, DBPriority priority = DBPrio_Normal)
 		{
 			Transaction tr = new Transaction();
 			
-			char buffer[256];
+			char buffer[256], buffer2[32];
 			Client(client).GetLastPlayed(buffer, sizeof(buffer));
+			Client(client).GetLoadout(buffer2, sizeof(buffer2));
 			
 			DataBase.Format(buffer, sizeof(buffer), "UPDATE " ... DATATABLE_GENERAL ... " SET "
 			... "queue = %d, "
@@ -258,7 +255,8 @@ void Database_ClientDisconnect(int client, DBPriority priority = DBPrio_Normal)
 			... "toggle_voice = %d, "
 			... "weapon_changes = %d, "
 			... "damage_hud = %d, "
-			... "last_played = '%s' "
+			... "last_played = '%s', "
+			... "loadout = '%s' "
 			... "WHERE steamid = %d;",
 			Client(client).Queue,
 			!Client(client).NoMusic ? Client(client).MusicShuffle ? 2 : 1 : 0,
@@ -266,6 +264,7 @@ void Database_ClientDisconnect(int client, DBPriority priority = DBPrio_Normal)
 			!Client(client).NoChanges,
 			!Client(client).NoDmgHud,
 			buffer,
+			buffer2,
 			id);
 			
 			tr.AddQuery(buffer);
@@ -303,16 +302,16 @@ void Database_ClientDisconnect(int client, DBPriority priority = DBPrio_Normal)
 	Preference_ClearArrays(client);
 }
 
-public void Database_Success(Database db, any data, int numQueries, DBResultSet[] results, any[] queryData)
+static void Database_Success(Database db, any data, int numQueries, DBResultSet[] results, any[] queryData)
 {
 }
 
-public void Database_Fail(Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData)
+static void Database_Fail(Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData)
 {
 	LogError("[Database] %s", error);
 }
 
-public void Database_FailHandle(Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData)
+static void Database_FailHandle(Database db, any data, int numQueries, const char[] error, int failIndex, any[] queryData)
 {
 	LogError("[Database] %s", error);
 	CloseHandle(data);
