@@ -1,4 +1,4 @@
-// only adding cvar to enable/disable plugin (i wanna use for my boss plugins lmao)
+// only adding cvar to enable/disable plugin (i just wanna use for my boss plugins lmao)
 
 #include <sourcemod>
 #include <sdktools>
