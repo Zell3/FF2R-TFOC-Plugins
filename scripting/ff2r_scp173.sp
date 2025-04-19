@@ -27,10 +27,10 @@ public Plugin myinfo =
   version     = "1.1.2"
 };
 
-bool IsEnabled = false;
-float  duration;
-float  interval;
-bool freeze;
+bool  IsEnabled = false;
+float duration;
+float interval;
+bool  freeze;
 
 public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 {
@@ -40,10 +40,10 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
     if (ability.IsMyPlugin())
     {
       IsEnabled = true;
-			HookEvent("player_death", Event_OnPlayerDeath, EventHookMode_PostNoCopy);
-      duration  = ability.GetFloat("duration", 2.0);
-      interval  = ability.GetFloat("interval", 10.0);
-      freeze    = ability.GetInt("freeze", 0) == 1;
+      HookEvent("player_death", Event_OnPlayerDeath, EventHookMode_PostNoCopy);
+      duration = ability.GetFloat("duration", 2.0);
+      interval = ability.GetFloat("interval", 10.0);
+      freeze   = ability.GetInt("freeze", 0) == 1;
       if (freeze)
       {
         TF2_AddCondition(client, TFCond_HalloweenKartNoTurn, interval);
@@ -57,15 +57,15 @@ public void FF2R_OnBossRemoved(int client)
 {
   if (IsEnabled)
   {
-		IsEnabled = false;
-		UnhookEvent("player_death", Event_OnPlayerDeath, EventHookMode_PostNoCopy);
+    IsEnabled = false;
+    UnhookEvent("player_death", Event_OnPlayerDeath, EventHookMode_PostNoCopy);
     // Clean up the overlay when the boss is removed
     SetCommandFlags("r_screenoverlay", GetCommandFlags("r_screenoverlay") & -FCVAR_CHEAT);
     for (int target = 1; target <= MaxClients; target++)
     {
       if (IsValidClient(target))
       {
-          ClientCommand(target, "r_screenoverlay \"\"");
+        ClientCommand(target, "r_screenoverlay \"\"");
       }
     }
     SetCommandFlags("r_screenoverlay", GetCommandFlags("r_screenoverlay") & FCVAR_CHEAT);
@@ -83,14 +83,14 @@ public Action Event_OnPlayerDeath(Handle event, const char[] name, bool dontBroa
     return Plugin_Continue;  // Prevent a bug with revive markers & dead ringer spies
 
   if (IsEnabled)
-	{
+  {
     SetCommandFlags("r_screenoverlay", GetCommandFlags("r_screenoverlay") & -FCVAR_CHEAT);
-      if (IsValidClient(client))
-      {
-          ClientCommand(client, "r_screenoverlay \"\"");
-      }
+    if (IsValidClient(client))
+    {
+      ClientCommand(client, "r_screenoverlay \"\"");
+    }
     SetCommandFlags("r_screenoverlay", GetCommandFlags("r_screenoverlay") & FCVAR_CHEAT);
-	}
+  }
 
   return Plugin_Continue;  // Continue the event
 }
