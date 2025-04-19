@@ -55,18 +55,12 @@ public void OnPluginStart()
 
   HookEvent("arena_win_panel", Event_RoundEnd, EventHookMode_Pre);
   HookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_Post);  // for non-arena maps
-
-  HookEvent("player_spawn", Event_OnPlayerSpawn, EventHookMode_Pre);
-  HookEvent("player_death", Event_OnPlayerDeath, EventHookMode_Post);
 }
 
 public void OnPluginEnd()
 {
-  HookEvent("arena_win_panel", Event_RoundEnd, EventHookMode_Pre);
-  HookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_Post);  // for non-arena maps
-
-  HookEvent("player_spawn", Event_OnPlayerSpawn, EventHookMode_Pre);
-  HookEvent("player_death", Event_OnPlayerDeath, EventHookMode_Post);
+  UnhookEvent("arena_win_panel", Event_RoundEnd, EventHookMode_Pre);
+  UnhookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_Post);  // for non-arena maps
 }
 
 public void OnClientDisconnect(int client)
@@ -89,8 +83,11 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
     AbilityData ability = cfg.GetAbility("special_revivemarker");
     if (ability.IsMyPlugin())
     {
+      HookEvent("player_spawn", Event_OnPlayerSpawn, EventHookMode_Pre);
+      HookEvent("player_death", Event_OnPlayerDeath, EventHookMode_Post);
+
       MarkerEnable = true;
-			bossIdx			= client;  // Boss index
+      bossIdx      = client;                              // Boss index
       decaytime    = ability.GetFloat("lifetime", 60.0);  // Reanimator decay time
       sound        = ability.GetInt("sound", 1) == 1;
       (ability.GetString("condition", condition, sizeof(condition), "81 ; 0.32"));  // Conditions to apply on respawn
@@ -103,7 +100,7 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
         if (FF2R_GetBossData(i))
           IsBoss[i] = true;  // Check if the client is a boss
 
-        reviveMarker[i] = 0;  // Reset revive marker
+        reviveMarker[i] = -1;  // Reset revive marker
 
         int limit       = ability.GetInt("limit", 0);
         if (limit > 0)
@@ -113,7 +110,8 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
         }
         else
         {
-          IsMarkerLimit = false;  // No revive limit
+          IsMarkerLimit  = false;  // No revive limit
+          reviveLimit[i] = 0;      // Reset revive limit
         }
 
         if (sound)
@@ -130,8 +128,11 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
   if (MarkerEnable)
   {
+    UnhookEvent("player_spawn", Event_OnPlayerSpawn, EventHookMode_Pre);
+    UnhookEvent("player_death", Event_OnPlayerDeath, EventHookMode_Post);
     for (int client = 1; client <= MaxClients; client++)
     {
+      IsBoss[client] = false;  // Reset boss check
       if (IsValidMarker(reviveMarker[client]))
       {
         RemoveReanimator(client);
@@ -171,7 +172,7 @@ public void Event_OnPlayerSpawn(Event event, const char[] name, bool dontBroadca
 
   AddCondition(client, condition);
 
-	// for debug
+  // for debug
   // PrintToChat(client, "%i", IsMarkerLimit);
   // PrintToChat(client, "%i", reviveLimit[client]);
 
@@ -180,7 +181,7 @@ public void Event_OnPlayerSpawn(Event event, const char[] name, bool dontBroadca
 
   reviveLimit[client] -= 1;  // Decrease revive limit
 
-	// for debug
+  // for debug
   // PrintToChat(client, "%i", reviveLimit[client]);
 
   if (reviveLimit[client] < 0)
@@ -215,12 +216,13 @@ public void Event_OnPlayerDeath(Event event, const char[] name, bool dontBroadca
   if (IsBoss[client])
     return;
 
-	if (GetClientTeam(client) == GetClientTeam(bossIdx)) {
-		if (GetClientTeam(bossIdx) == 3)
-			ChangeClientTeam(client, 2);  // Change to RED team
-		else if (GetClientTeam(bossIdx) == 2)
-			ChangeClientTeam(client, 3);  // Change to BLU team
-	}
+  if (GetClientTeam(client) == GetClientTeam(bossIdx))
+  {
+    if (GetClientTeam(bossIdx) == 3)
+      ChangeClientTeam(client, 2);  // Change to RED team
+    else if (GetClientTeam(bossIdx) == 2)
+      ChangeClientTeam(client, 3);  // Change to BLU team
+  }
 
   // check if player reached the revive limit
   if (IsMarkerLimit && reviveLimit[client] <= 0)
@@ -291,8 +293,8 @@ public Action MoveMarker(Handle timer, int client)
 {
   float position[3];
   GetEntPropVector(client, Prop_Send, "m_vecOrigin", position);
-	if (IsValidMarker(reviveMarker[client]))
-  	TeleportEntity(reviveMarker[client], position, NULL_VECTOR, NULL_VECTOR);
+  if (IsValidMarker(reviveMarker[client]))
+    TeleportEntity(reviveMarker[client], position, NULL_VECTOR, NULL_VECTOR);
   return Plugin_Continue;
 }
 

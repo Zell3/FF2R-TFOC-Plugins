@@ -106,7 +106,7 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 
       if (client == i)
       {
-        if (bossSpeed != -1 && bossDuration != -1)
+        if (bossSpeed >= 0.0 && bossDuration >= 0.0)
         {
           NewSpeed[client] = bossSpeed;
           if (NewSpeedDuration[client] != INACTIVE)
@@ -124,7 +124,7 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
       }
       else if (GetClientTeam(i) == GetClientTeam(client))
       {
-        if (allySpeed != -1 && allyDuration != -1)
+        if (allySpeed >= 0.0 && allyDuration >= 0.0)
         {
           NewSpeed[i] = allySpeed;
           if (NewSpeedDuration[i] != INACTIVE)
@@ -138,7 +138,7 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
         }
       }
       else {
-        if (victimSpeed != -1 && victimDuration != -1)
+        if (victimSpeed >= 0.0 && victimDuration >= 0.0)
         {
           GetEntPropVector(i, Prop_Send, "m_vecOrigin", pos2);
           float dist = GetVectorDistance(pos, pos2);

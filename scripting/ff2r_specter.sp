@@ -91,8 +91,8 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
     {
       isActive   = true;
       bossTeam   = GetClientTeam(client);
-      clientTeam = (bossTeam == (view_as<int>(TFTeam_Blue)) ? (view_as<int>(TFTeam_Red)) : (view_as<int>(TFTeam_Blue)))
-        PrecacheSound(GENTLEMEN_START, true);
+      clientTeam = (bossTeam == (view_as<int>(TFTeam_Blue)) ? (view_as<int>(TFTeam_Red)) : (view_as<int>(TFTeam_Blue)));
+      PrecacheSound(GENTLEMEN_START, true);
       PrecacheSound(GENTLEMEN_EXIT, true);
     }
   }
@@ -161,7 +161,7 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
         if (isTarget[pl])
         {
           isTarget[pl] = false;
-          playerleft++
+          playerleft++;
         }
 
         if (limit >= alivePlayer && playerleft == alivePlayer - 2)
