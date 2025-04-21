@@ -35,6 +35,8 @@
     "weapons3"   "105"	// Weapon item index (TF2Items) to trigger the outline
     "duration3"  "10.0"	// Duration of the outline
     "color3"	   "255 0 0 0"	// Color of the outline (RGBA format) : default is check by team
+
+    "plugin_name"	"ff2r_outline"
   }
 */
 

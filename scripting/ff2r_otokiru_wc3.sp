@@ -390,7 +390,7 @@ public void DoChain(int boss, int client, float distance, int dmg, int last_targ
     GetClientAbsOrigin(last_target, start_pos);
   for (int x = 1; x <= MaxClients; x++)
   {
-    if (IsValidClient(x, true) && !bBeenHit[client][x] && caster_team != GetClientTeam(x))
+    if (IsValidClient(x) && !bBeenHit[client][x] && caster_team != GetClientTeam(x))
     {
       float this_pos[3];
       GetClientAbsOrigin(x, this_pos);

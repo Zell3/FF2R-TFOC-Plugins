@@ -52,15 +52,22 @@ void Weapons_PrintStatus()
 
 static Action Weapons_DebugRefresh(int client, int args)
 {
-	TF2_RemoveAllItems(client);
-	
-	int entity, i;
-	while(TF2U_GetWearable(client, entity, i))
+	if(client)
 	{
-		TF2_RemoveWearable(client, entity);
+		TF2_RemoveAllItems(client);
+		
+		int entity, i;
+		while(TF2U_GetWearable(client, entity, i))
+		{
+			TF2_RemoveWearable(client, entity);
+		}
+		
+		TF2_RegeneratePlayer(client);
 	}
-	
-	TF2_RegeneratePlayer(client);
+	else
+	{
+		ReplyToCommand(client, "[SM] %t", "Command is in-game only");
+	}
 	return Plugin_Handled;
 }
 
@@ -69,6 +76,22 @@ static Action Weapons_DebugReload(int client, int args)
 	if(Weapons_ConfigsExecuted(true))
 	{
 		FReplyToCommand(client, "Reloaded");
+
+		for(int target = 1; target <= MaxClients; target++)
+		{
+			if(IsClientInGame(target) && !Client(target).IsBoss && !Client(target).MinionType)
+			{
+				TF2_RemoveAllItems(target);
+				
+				int entity, i;
+				while(TF2U_GetWearable(target, entity, i))
+				{
+					TF2_RemoveWearable(target, entity);
+				}
+				
+				TF2_RegeneratePlayer(target);
+			}
+		}
 	}
 	else if(client && CheckCommandAccess(client, "sm_rcon", ADMFLAG_RCON))
 	{
@@ -87,6 +110,10 @@ static Action Weapons_ChangeMenuCmd(int client, int args)
 	{
 		Menu_Command(client);
 		Weapons_ChangeMenu(client);
+	}
+	else
+	{
+		ReplyToCommand(client, "[SM] %t", "Command is in-game only");
 	}
 	return Plugin_Handled;
 }
@@ -193,7 +220,7 @@ void Weapons_ChangeMenu(int client, int time = MENU_TIME_FOREVER, int page = 0)
 			menu.Display(client, time);
 		}
 	}
-	else if(Weapons_ConfigEnabled() && !Client(client).Minion)
+	else if(Weapons_ConfigEnabled() && Client(client).MinionType != 1)
 	{
 		SetGlobalTransTarget(client);
 		
@@ -234,7 +261,7 @@ void Weapons_ChangeMenu(int client, int time = MENU_TIME_FOREVER, int page = 0)
 			
 			int entity = TF2U_GetPlayerLoadoutEntity(client, i);
 			
-			if(entity != -1 && FindWeaponSection(entity, loadout))
+			if(entity != -1 && FindWeaponSection(entity, loadout, _, client))
 			{
 				IntToString(EntIndexToEntRef(entity), buffer1, sizeof(buffer1));
 				menu.AddItem(buffer1, buffer2);
@@ -330,7 +357,7 @@ static int Weapons_ChangeMenuH(Menu menu, MenuAction action, int client, int cho
 					
 					Weapons_ChangeMenu(client, _, choice);
 				}
-				else if(!Client(client).IsBoss && !Client(client).Minion)
+				else if(!Client(client).IsBoss && !Client(client).MinionType)
 				{
 					Client(client).SetLoadout(buffer);
 
@@ -391,7 +418,7 @@ void Weapons_ShowChanges(int client, int entity)
 	
 	char cwx[64], loadout[32];
 	Client(client).GetLoadout(loadout, sizeof(loadout));
-	ConfigMap cfg = FindWeaponSection(entity, loadout, cwx);
+	ConfigMap cfg = FindWeaponSection(entity, loadout, cwx, client);
 
 	if(!cfg)
 		return;
@@ -510,7 +537,10 @@ void Weapons_ShowChanges(int client, int entity)
 				{
 					int attrib = TF2ED_TranslateAttributeNameToDefinitionIndex(key);
 					if(attrib != -1)
+					{
+						strcopy(value, sizeof(value), attributeValue.data);
 						PrintThisAttrib(client, attrib, value, type, desc, buffer2, key, length);
+					}
 				}
 			}
 
@@ -647,12 +677,12 @@ static void Weapons_SpawnFrame(int ref)
 		return;
 	
 	int client = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
-	if(client < 1 || client > MaxClients || Client(client).IsBoss || Client(client).Minion)
+	if(client < 1 || client > MaxClients || Client(client).IsBoss || Client(client).MinionType == 1)
 		return;
 	
 	char loadout[32];
 	Client(client).GetLoadout(loadout, sizeof(loadout));
-	ConfigMap cfg = FindWeaponSection(entity, loadout);
+	ConfigMap cfg = FindWeaponSection(entity, loadout, _, client);
 	if(!cfg)
 		return;
 	
@@ -771,7 +801,7 @@ static ConfigMap FindMatchingLoadout(const char[] loadou)
 	return cfg;
 }
 
-static ConfigMap FindWeaponSection(int entity, const char[] loadou, char cwx[64] = "")
+static ConfigMap FindWeaponSection(int entity, const char[] loadou, char cwx[64] = "", int client = 0)
 {
 	char buffer1[64];
 
@@ -789,6 +819,9 @@ static ConfigMap FindWeaponSection(int entity, const char[] loadou, char cwx[64]
 	
 	cwx[0] = 0;
 	
+	if(client && Client(client).MinionType == 2)
+		return loadout.GetSection("Classnames.ff2_weapon_teuton");
+
 	ConfigMap cfg = loadout.GetSection("Indexes");
 	if(cfg)
 	{
