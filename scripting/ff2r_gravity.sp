@@ -28,7 +28,7 @@
   {
     "slot"            "0"
 
-    "position"	      "1"		    // Position; 1:Aim Pos, 2:Stand Pos
+    "position"	      "1"		    // Position; 0:Stand Pos, 1:Aim Pos
     "distance"	      "99999.0"	// Effect Distance
     "upwardforce"     "1200.0"	  // Upward Velocity Force
     "upwardduration"  "1.3"	  // Gravity Force will be applied after this duration
@@ -36,7 +36,7 @@
     "gravityduration" "2.2"	  // Gravity Force Duration
     "explodebuilding" "1"   	// Explode Buildings? 0:No 1:Yes
     "damage"	        "0.0"		  // Damage to player
-    "particle"	      "particles/ff2r_gravity/sigma.vpcf" // Particle Effect to affected player	(Ignored if particle is blank)
+    "particle"	      "ghost_smoke" // Particle Effect to affected player	(Ignored if particle is blank)
     "particlepoint"   "head"	  // Particle Replace Point				(Ignored if particle is blank)
 
     "plugin_name"	    "ff2r_gravity"

@@ -1,7 +1,7 @@
 // "rage_servercommand"
 // {
 //
-//     "range"            "400"             // Range            (Range of effect of server command, only applicable if arg7 = 0)
+//     "distance"            "400"             // Distance            (Distance of effect of server command, only applicable if arg7 = 0)
 //     "duration"            "7"              // Duration            (Duration in seconds between server commands. Set to 0 if not using arg5 and arg6)
 //     "startcommand"            "sm_blind"    // Server Command Start            (Server command executed at start of duration)
 //     "startparam"            "250"    // Optional Server Command Start Parameter             (Server command parameter used with arg3, if applicable)
