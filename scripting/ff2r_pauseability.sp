@@ -82,14 +82,22 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
       // just give me 1 player that can pause the game
       if (!paused)
       {
+        HookConVarChange(FindConVar("sv_cheats"), HideCvarNotify);
+        SetConVarInt(FindConVar("sv_cheats"), 1);
+        UnhookConVarChange(FindConVar("sv_cheats"), HideCvarNotify);
+
         HookConVarChange(FindConVar("sv_pausable"), HideCvarNotify);
-        SetConVarInt(FindConVar("sv_pausable"), true);
+        SetConVarBool(FindConVar("sv_pausable"), true);
         UnhookConVarChange(FindConVar("sv_pausable"), HideCvarNotify);
 
         IsProxy[i] = true;
         FakeClientCommand(i, "pause");
         IsProxy[i] = false;
         paused     = true;
+
+        HookConVarChange(FindConVar("sv_cheats"), HideCvarNotify);
+        SetConVarInt(FindConVar("sv_cheats"), 0);
+        UnhookConVarChange(FindConVar("sv_cheats"), HideCvarNotify);
       }
       SetNextAttack(i, duration);
     }
@@ -126,6 +134,10 @@ public Action UnPause(Handle hTimer)
 
     if (paused)
     {
+      HookConVarChange(FindConVar("sv_cheats"), HideCvarNotify);
+      SetConVarInt(FindConVar("sv_cheats"), 1);
+      UnhookConVarChange(FindConVar("sv_cheats"), HideCvarNotify);
+
       HookConVarChange(FindConVar("sv_pausable"), HideCvarNotify);
       SetConVarBool(FindConVar("sv_pausable"), true);
       UnhookConVarChange(FindConVar("sv_pausable"), HideCvarNotify);
@@ -134,6 +146,10 @@ public Action UnPause(Handle hTimer)
       FakeClientCommand(i, "pause");
       paused     = false;
       IsProxy[i] = false;
+
+      HookConVarChange(FindConVar("sv_cheats"), HideCvarNotify);
+      SetConVarInt(FindConVar("sv_cheats"), 0);
+      UnhookConVarChange(FindConVar("sv_cheats"), HideCvarNotify);
     }
 
     SetNextAttack(i, 0.1);
