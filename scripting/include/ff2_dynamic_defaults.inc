@@ -16,7 +16,7 @@ stock Handle:FindDDPlugin()
 		pl = ReadPlugin(iter);
 		
 		GetPluginFilename(pl, buffer, sizeof(buffer));
-		if (StrContains(buffer, "ff2_dynamic_defaults.ff2", false) != -1)
+		if (StrContains(buffer, "ff2_dynamic_defaults", false) != -1)
 			break;
 		else
 			pl = INVALID_HANDLE;
