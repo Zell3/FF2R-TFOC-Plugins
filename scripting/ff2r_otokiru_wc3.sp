@@ -122,11 +122,11 @@ public void OnPluginStart()
 
 public void OnPluginEnd()
 {
-	for(int clientIdx = 1; clientIdx <= MaxClients; clientIdx++)
-	{
-		// Clear everything from players, because FF2:R either disabled/unloaded or this subplugin unloaded
+  for (int clientIdx = 1; clientIdx <= MaxClients; clientIdx++)
+  {
+    // Clear everything from players, because FF2:R either disabled/unloaded or this subplugin unloaded
     FF2R_OnBossRemoved(clientIdx);
-	}
+  }
 }
 
 public void FF2R_OnBossCreated(int clientIdx, BossData cfg, bool setup)
@@ -135,7 +135,7 @@ public void FF2R_OnBossCreated(int clientIdx, BossData cfg, bool setup)
   {
     for (int i = 1; i <= MaxClients; i++)
     {
-      if (!IsValidClient(i))
+      if (!IsValidLivingClient(i))
         continue;
 
       // Make these multi-boss friendly
@@ -152,14 +152,11 @@ public void FF2R_OnBossCreated(int clientIdx, BossData cfg, bool setup)
 
 public void FF2R_OnBossRemoved(int clientIdx)
 {
-  if (IsValidClient(clientIdx))
-  {
-    // Make these multi-boss friendly
-    bChainLightningDamage[clientIdx] = 0;
-    bEntangles[clientIdx] = bChainLightnings[clientIdx] = bTeleports[clientIdx] = 0;
-    bEntangleDuration[clientIdx] = bChainLightningDistance[clientIdx] = bTeleportDistance[clientIdx] = 0.0;
-    bEntangleButton[clientIdx] = bChainLightningButton[clientIdx] = bTeleportButton[clientIdx] = 0;
-  }
+  // Make these multi-boss friendly
+  bChainLightningDamage[clientIdx] = 0;
+  bEntangles[clientIdx] = bChainLightnings[clientIdx] = bTeleports[clientIdx] = 0;
+  bEntangleDuration[clientIdx] = bChainLightningDistance[clientIdx] = bTeleportDistance[clientIdx] = 0.0;
+  bEntangleButton[clientIdx] = bChainLightningButton[clientIdx] = bTeleportButton[clientIdx] = 0;
 }
 
 public void FF2R_OnAbility(int clientIdx, const char[] ability, AbilityData cfg)
@@ -270,7 +267,7 @@ public void FF2R_OnAbility(int clientIdx, const char[] ability, AbilityData cfg)
 
 public Action ShowAbilityStatus(Handle timer, int client)
 {
-  if (!IsValidClient(client) || !IsPlayerAlive(client))
+  if (!IsValidLivingClient(client))
     return Plugin_Stop;
 
   char HUDStatus[128];
@@ -302,7 +299,7 @@ public Action ShowAbilityStatus(Handle timer, int client)
 
 public Action AbilityButton(Handle timer, int client)
 {
-  if (!IsValidClient(client) || !IsPlayerAlive(client))
+  if (!IsValidLivingClient(client))
     return Plugin_Stop;
 
   if (bEntangles[client] > 0)
@@ -314,7 +311,7 @@ public Action AbilityButton(Handle timer, int client)
       float our_pos[3];
       GetClientAbsOrigin(client, our_pos);
       target = War3_GetTargetInViewCone(client, distance);
-      if (IsValidClient(target))
+      if (IsValidLivingClient(target))
       {
         bEntangles[client] = (bEntangles[client] > 0 ? bEntangles[client] - 1 : 0);
         float fVelocity[3] = { 0.0, 0.0, 0.0 };
@@ -349,8 +346,9 @@ public Action AbilityButton(Handle timer, int client)
         TE_SendToAll();
         PrintHintText(target, "You got Entangled!");
 
-        EmitSoundToAll(entangleSound);
-        EmitSoundToAll(entangleSound);
+        EmitSoundToAll(entangleSound, _, _, _, _, 0.8);
+        EmitSoundToAll(entangleSound, _, _, _, _, 0.8);
+        
       }
       else
       {
@@ -390,7 +388,7 @@ public void DoChain(int boss, int client, float distance, int dmg, int last_targ
     GetClientAbsOrigin(last_target, start_pos);
   for (int x = 1; x <= MaxClients; x++)
   {
-    if (IsValidClient(x) && !bBeenHit[client][x] && caster_team != GetClientTeam(x))
+    if (IsValidLivingClient(x) && !bBeenHit[client][x] && caster_team != GetClientTeam(x))
     {
       float this_pos[3];
       GetClientAbsOrigin(x, this_pos);
@@ -422,7 +420,7 @@ public void DoChain(int boss, int client, float distance, int dmg, int last_targ
     GetClientEyeAngles(target, vecAngles);
     TE_SetupBloodSprite(target_pos, vecAngles, { 200, 20, 20, 255 }, 28, BloodSpray, BloodDrop);
     TE_SendToAll();
-    EmitSoundToAll(lightningSound, target, _, SNDLEVEL_TRAIN);
+    EmitSoundToAll(lightningSound, target, _, SNDLEVEL_TRAIN, _, 0.8);
     int new_dmg = RoundFloat(float(dmg) * 0.66);
 
     DoChain(boss, client, distance, new_dmg, target);
@@ -570,11 +568,16 @@ public bool CanHitThis(int entityhit, int mask, any data)
   {                // Check if the TraceRay hit the itself.
     return false;  // Don't allow self to be hit, skip this result
   }
-  if (IsValidClient(entityhit) && IsValidClient(data) && GetClientTeam(entityhit) == GetClientTeam(data))
+  if (IsValidLivingClient(entityhit) && IsValidLivingClient(data) && GetClientTeam(entityhit) == GetClientTeam(data))
   {
     return false;  // skip result, prend this space is not taken cuz they on same team
   }
   return true;  // It didn't hit itself
+}
+
+stock bool IsValidLivingClient(int client)
+{
+  return (IsValidClient(client) && IsPlayerAlive(client));
 }
 
 stock bool IsValidClient(int clientIdx, bool replaycheck = true)
@@ -632,8 +635,8 @@ public bool War3_Teleport(int client, float distance)
       }
 
       TeleportEntity(client, emptypos, NULL_VECTOR, NULL_VECTOR);
-      EmitSoundToAll(teleportSound);
-      EmitSoundToAll(teleportSound);
+      EmitSoundToAll(teleportSound, _, _, _, _, 0.8);
+      EmitSoundToAll(teleportSound, _, _, _, _, 0.8);
 
       teleportpos[client][0]  = emptypos[0];
       teleportpos[client][1]  = emptypos[1];
@@ -656,7 +659,7 @@ public bool War3_Teleport(int client, float distance)
 
 public int War3_GetTargetInViewCone(int client, float max_distance)
 {
-  if (IsValidClient(client))
+  if (IsValidLivingClient(client))
   {
     ignoreClient = client;
     if (max_distance < 0.0)
