@@ -25,7 +25,7 @@ bool             IsProxy[MAXPLAYERS + 1];
 public Plugin myinfo =
 {
   name        = "Freak Fortress 2 Rewrite: Pause Ability",
-  author      = "Naydef, Zell (i just use new syntax)",
+  author      = "Naydef, Zell (i just use new syntax and check if server sv_cheats is enabled)",
   description = "Subplugin, which can pause the whole server!",
   version     = "0.5.2",
   url         = "https://forums.alliedmods.net/showthread.php?p=2421885#post24218854"
