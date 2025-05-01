@@ -4,7 +4,7 @@
     "duration"		"2.0"	// Duration of Rage
     "interval"		"5.0"	// Interval of Rage
     "freeze"	    "0"   // Does boss move freely while doesn't in rage? 0 = No, 1 = Yes
-
+    "path"        "draqz/ff2/fpywnm/overlay"    // materials path for the overlay
     "plugin_name"	"ff2r_scp173"
   }
 */
@@ -31,6 +31,7 @@ bool  IsEnabled = false;
 float duration;
 float interval;
 bool  freeze;
+char  path[PLATFORM_MAX_PATH];
 
 public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 {
@@ -48,6 +49,8 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
       {
         TF2_AddCondition(client, TFCond_HalloweenKartNoTurn, interval);
       }
+      char  path[PLATFORM_MAX_PATH];
+      cfg.GetString("path", path, sizeof(path));
       CreateTimer(interval, TurnOffLights, client, TIMER_FLAG_NO_MAPCHANGE);
     }
   }
@@ -126,6 +129,9 @@ public Action TurnOffLights(Handle timer, int client)
   if (!IsEnabled)
     return Plugin_Stop;
 
+  char  overlay[PLATFORM_MAX_PATH];
+  Format(overlay, sizeof(overlay), "r_screenoverlay \"%s\"", path);
+
   SetCommandFlags("r_screenoverlay", GetCommandFlags("r_screenoverlay") & -FCVAR_CHEAT);
   for (int target = 1; target <= MaxClients; target++)
   {
@@ -133,7 +139,7 @@ public Action TurnOffLights(Handle timer, int client)
     {
       if (GetClientTeam(target) != GetClientTeam(client) && IsPlayerAlive(target))
       {
-        ClientCommand(target, "r_screenoverlay \"%s\"", "effects/tp_eyefx/tp_black");
+        ClientCommand(target, overlay);  // Set the screen overlay for the target
       }
     }
   }
