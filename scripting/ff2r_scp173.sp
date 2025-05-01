@@ -49,7 +49,6 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
       {
         TF2_AddCondition(client, TFCond_HalloweenKartNoTurn, interval);
       }
-      char  path[PLATFORM_MAX_PATH];
       cfg.GetString("path", path, sizeof(path));
       CreateTimer(interval, TurnOffLights, client, TIMER_FLAG_NO_MAPCHANGE);
     }
