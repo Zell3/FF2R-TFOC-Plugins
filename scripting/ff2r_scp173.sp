@@ -23,7 +23,7 @@ public Plugin myinfo =
 {
   name        = "Freak Fortress 2: SCP-173 Special Abilities",
   description = "Decompiled and Rewroten version",
-  author      = "OriginalNero, Rewrite by Batfoxkid, Decompiled by Maximilian_",
+  author      = "OriginalNero, Rewrite by Batfoxkid, Decompiled by Maximilian_, and port to FF2R by Zell",
   version     = "1.1.2"
 };
 
