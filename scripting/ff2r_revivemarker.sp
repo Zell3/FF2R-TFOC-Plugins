@@ -395,8 +395,10 @@ stock void AddCondition(int clientIdx, char[] conditions)
     {
       if (!TF2_IsPlayerInCondition(clientIdx, view_as<TFCond>(StringToInt(conds[i]))))
       {
+        TF2_AddCondition(clientIdx, view_as<TFCond>(StringToInt(conds[i])), StringToFloat(conds[i + 1]));
+        // if view_as<TFCond> and plugin doesn't work then use this line instead
         // TF2_AddCondition(clientIdx, StringToInt(conds[i]), StringToFloat(conds[i + 1]));
-        // TF2_AddCondition(clientIdx, view_as<TFCond>(StringToInt(conds[i])), StringToFloat(conds[i + 1]));
+
         // PrintToChatAll("Added condition %i to %N for %f seconds", StringToInt(conds[i]), clientIdx, StringToFloat(conds[i + 1]));  // Print to chat that the condition was added
       }
     }
