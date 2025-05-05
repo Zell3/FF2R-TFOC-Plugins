@@ -13,11 +13,10 @@
 */
 
 #include <sourcemod>
-#include <cfgmap>
-#include <ff2r>
-#include <tf2items>
 #include <sdktools>
 #include <sdkhooks>
+#include <cfgmap>
+#include <ff2r>
 #include <tf2_stocks>
 
 #pragma semicolon 1
@@ -86,7 +85,8 @@ public void OnPluginStart()
   g_State.decayTime    = 0.0;
 
   // this for remove the revive marker when revived
-  HookEvent("post_inventory_application", Event_OnPlayerSpawn, EventHookMode_PostNoCopy);
+  HookEvent("player_spawn", Event_OnPlayerSpawn, EventHookMode_Pre);
+  // HookEvent("post_inventory_application", Event_OnPlayerSpawn, EventHookMode_Pre);
 
   // this for adding the revive marker when dead
   HookEvent("player_death", Event_OnPlayerDeath, EventHookMode_PostNoCopy);
@@ -111,7 +111,10 @@ public void OnPluginEnd()
   g_State.bossIndex    = -1;
   g_State.decayTime    = 0.0;
 
-  UnhookEvent("post_inventory_application", Event_OnPlayerSpawn, EventHookMode_PostNoCopy);
+  // Unhook events
+  UnhookEvent("player_spawn", Event_OnPlayerSpawn, EventHookMode_Pre);
+  // UnhookEvent("post_inventory_application", Event_OnPlayerSpawn, EventHookMode_Pre);
+
   UnhookEvent("player_death", Event_OnPlayerDeath, EventHookMode_PostNoCopy);
   UnhookEvent("arena_win_panel", Event_RoundEnd, EventHookMode_Pre);
   UnhookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_Post);  // for non-arena maps
@@ -137,7 +140,7 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 
       // Fix the condition string parsing
       char tempConditions[128];
-      ability.GetString("condition", tempConditions, sizeof(tempConditions), "33 ; 3");
+      ability.GetString("condition", tempConditions, sizeof(tempConditions), "81 ; 0.32");
       strcopy(g_State.conditions, sizeof(g_State.conditions), tempConditions);
 
       int limit = ability.GetInt("limit", 0);
@@ -214,7 +217,8 @@ public void Event_OnPlayerSpawn(Event event, const char[] name, bool dontBroadca
   if (TF2_GetClientTeam(client) == TF2_GetClientTeam(g_State.bossIndex))
     return;
 
-  AddCondition(client, g_State.conditions);
+  //  PrintToChatAll("Player %N has been revived! with conditions: %s", client, g_State.conditions);  // Print to chat that the player has been revived with conditions
+  AddCondition(client, g_State.conditions); // Add conditions to the player
 
   if (!g_State.limitEnabled)
     return;  // No revive limit
@@ -382,13 +386,18 @@ static void ShowReviveMessage(int client, int revivesLeft)
 
 stock void AddCondition(int clientIdx, char[] conditions)
 {
-  if (conditions[0] == '\0')
-    return;
-
   char conds[32][32];
   int  count = ExplodeString(conditions, " ; ", conds, sizeof(conds), sizeof(conds));
+  // PrintToChatAll("Adding conditions to %N: %s", clientIdx, conditions);  // Print to chat that the conditions are being added
   if (count > 0)
+  {
     for (int i = 0; i < count; i += 2)
+    {
       if (!TF2_IsPlayerInCondition(clientIdx, view_as<TFCond>(StringToInt(conds[i]))))
-        TF2_AddCondition(clientIdx, view_as<TFCond>(StringToInt(conds[i])), StringToFloat(conds[i + 1]));
+      {
+        TF2_AddCondition(clientIdx, StringToInt(conds[i]), StringToFloat(conds[i + 1]));
+        // PrintToChatAll("Added condition %i to %N for %f seconds", StringToInt(conds[i]), clientIdx, StringToFloat(conds[i + 1]));  // Print to chat that the condition was added
+      }
+    }
+  }
 }
