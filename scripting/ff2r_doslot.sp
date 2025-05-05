@@ -38,11 +38,24 @@
 #include <sourcemod>
 #include <cfgmap>
 #include <ff2r>
+#include <sdkhooks>
+#include <sdktools>
 
 #pragma semicolon 1
 #pragma newdecls required
 
-bool             IsRound;
+#define INACTIVE 100000000.0
+
+// Create structures to hold slot data
+enum struct SlotData
+{
+  int   slotNumber;
+  float timer;
+}
+
+// Dynamic arrays to store slot data for each player
+ArrayList g_PassiveSlots[MAXPLAYERS + 1];
+ArrayList g_RageSlots[MAXPLAYERS + 1];
 
 public Plugin myinfo =
 {
@@ -55,27 +68,28 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-  for (int client = 1; client <= MaxClients; client++)
+  HookEvent("arena_win_panel", Event_RoundEnd, EventHookMode_PostNoCopy);
+  HookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_PostNoCopy);
+
+  // Initialize arrays for all possible players
+  for (int client = 0; client <= MAXPLAYERS; client++)
   {
-    if (IsClientInGame(client))
-    {
-      BossData cfg = FF2R_GetBossData(client);
-      if (cfg)
-      {
-        FF2R_OnBossCreated(client, cfg, false);
-      }
-    }
+    g_PassiveSlots[client] = new ArrayList(sizeof(SlotData));
+    g_RageSlots[client]    = new ArrayList(sizeof(SlotData));
   }
 }
 
 public void OnPluginEnd()
 {
-  for (int client = 1; client <= MaxClients; client++)
+  // unhook events
+  UnhookEvent("arena_win_panel", Event_RoundEnd, EventHookMode_PostNoCopy);
+  UnhookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_PostNoCopy);
+
+  // Clean up arrays
+  for (int client = 0; client <= MaxClients; client++)
   {
-    if (IsClientInGame(client) && FF2R_GetBossData(client))
-    {
-      FF2R_OnBossRemoved(client);
-    }
+    delete g_PassiveSlots[client];
+    delete g_RageSlots[client];
   }
 }
 
@@ -83,64 +97,104 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 {
   if (!setup || FF2R_GetGamemodeType() != 2)
   {
+    // Clear existing data
+    g_PassiveSlots[client].Clear();
+    g_RageSlots[client].Clear();
+
     AbilityData ability = cfg.GetAbility("passive_doslot");
-    if (ability && ability.IsMyPlugin())
+    if (ability.IsMyPlugin())
     {
       int max = ability.GetInt("max", 0);
-      IsRound = true;
+
       for (int i = 1; i <= max; i++)
       {
         char ability_name[64];
 
-        // delay times are 0.0, 1.0, 2.0, 3.0, etc.
-        Format(ability_name, sizeof(ability_name), "delay%i", i);
-        if (ability.GetFloat(ability_name, 0.0) < 0)
-          continue;
-        float delay = ability.GetFloat(ability_name, 0.0);
-        // PrintToServer("[delay%i] delay: %f", i, delay);
-
-        // Check if the slot is valid
         Format(ability_name, sizeof(ability_name), "doslot%i", i);
-        if (ability.GetInt(ability_name, -2) == -2)
-          continue;
-        int      slot = ability.GetInt(ability_name, -2);
-        // PrintToServer("[slot%i] slot: %f", i, slot);
+        int slotNum = ability.GetInt(ability_name, -2);
 
-        DataPack pack;
-        CreateDataTimer(delay, DoSlot, pack, TIMER_FLAG_NO_MAPCHANGE);
-        pack.WriteCell(client);
-        pack.WriteCell(slot);
+        if (slotNum != -2)
+        {
+          Format(ability_name, sizeof(ability_name), "delay%i", i);
+          float    delay = ability.GetFloat(ability_name);
+
+          SlotData data;
+          data.slotNumber = slotNum;
+          data.timer      = GetEngineTime() + delay;
+
+          g_PassiveSlots[client].PushArray(data);
+        }
       }
     }
+    SDKHook(client, SDKHook_PreThink, DoSlot_Prethink);
   }
 }
 
-public void FF2R_OnBossRemoved(int clientIdx)
+// public void FF2R_OnBossRemoved(int client)
+// {
+//   g_PassiveSlots[client].Clear();
+//   g_RageSlots[client].Clear();
+//   SDKUnhook(client, SDKHook_PreThink, DoSlot_Prethink);
+// }
+
+public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
-  IsRound = false;
+  for (int client = 1; client <= MaxClients; client++)
+  {
+    if (FF2R_GetBossData(client))
+    {
+      g_PassiveSlots[client].Clear();
+      g_RageSlots[client].Clear();
+      SDKUnhook(client, SDKHook_PreThink, DoSlot_Prethink);
+      break;
+    }
+  }
 }
 
 public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 {
   if (!StrContains(ability, "rage_doslot", false) && cfg.IsMyPlugin())
   {
-    IsRound = true;
-    DataPack pack;
-    CreateDataTimer(cfg.GetFloat("delay", 0.0), DoSlot, pack, TIMER_FLAG_NO_MAPCHANGE);
-    pack.WriteCell(client);
-    pack.WriteCell(cfg.GetInt("doslot"));
+    SlotData data;
+    data.slotNumber = cfg.GetInt("doslot", 0);
+    data.timer      = GetEngineTime() + cfg.GetFloat("delay", 0.0);
+
+    g_RageSlots[client].PushArray(data);
   }
 }
 
-public Action DoSlot(Handle timer, DataPack pack)
+public void DoSlot_Prethink(int client)
 {
-  if (!IsRound)
-    return Plugin_Stop;
-  pack.Reset();
-  int client = pack.ReadCell();
-  int slot   = pack.ReadCell();
+  DoSlot(client, GetEngineTime());
+}
 
-  FF2R_DoBossSlot(client, slot);
+public void DoSlot(int client, float gameTime)
+{
+  // Handle passive slots
+  int passiveCount = g_PassiveSlots[client].Length;
+  for (int i = passiveCount - 1; i >= 0; i--)
+  {
+    SlotData data;
+    g_PassiveSlots[client].GetArray(i, data);
 
-  return Plugin_Continue;
+    if (data.timer <= gameTime)
+    {
+      FF2R_DoBossSlot(client, data.slotNumber, data.slotNumber);
+      g_PassiveSlots[client].Erase(i);
+    }
+  }
+
+  // Handle rage slots
+  int rageCount = g_RageSlots[client].Length;
+  for (int i = rageCount - 1; i >= 0; i--)
+  {
+    SlotData data;
+    g_RageSlots[client].GetArray(i, data);
+
+    if (data.timer <= gameTime)
+    {
+      FF2R_DoBossSlot(client, data.slotNumber, data.slotNumber);
+      g_RageSlots[client].Erase(i);
+    }
+  }
 }
