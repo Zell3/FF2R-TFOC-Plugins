@@ -44,7 +44,8 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-  HookEvent("player_spawn", Event_OnPlayerSpawn, EventHookMode_Pre);
+  HookEvent("player_spawn", Event_OnPlayerSpawn, EventHookMode_PostNoCopy);
+  HookEvent("post_inventory_application", Event_OnPlayerSpawn, EventHookMode_PostNoCopy);
 
   hooksEnabled = false;
 
@@ -76,6 +77,7 @@ public void Event_OnPlayerSpawn(Event event, const char[] name, bool dontBroadca
 
 public void OnPluginEnd()
 {
+  hooksEnabled = false;
   for (int client = 1; client <= MaxClients; client++)
   {
     if (IsClientInGame(client) && FF2R_GetBossData(client))
