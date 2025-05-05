@@ -1,24 +1,22 @@
 /*
-	"rage_outline"		// Ability name can use suffixes
-	{
-		"slot"			"0"								  // Ability Slot
+  // outline abilities (outline color will always represent the team color cuz why not)
+
+  "rage_outline"		// Ability name can use suffixes
+  {
+    "slot"			"0"								  // Ability Slot
     "duration"	"10.0"							// Duration of the outline
-    // non-functional outline settings
-    // "color"		"255 0 0 0"						// Color of the outline (RGBA format) : default is check by team
-    "target"  "3"                   // 0: Everyone, 1: Only Self, 2:Team, 3: Enemy Team, 4: Everyone besides self
-
-    "plugin_name"	"ff2r_outline"
-	}
-
-	"special_outline"
-	{
-    // non-functional outline settings
-    // "color"		"255 0 0 0"						// Color of the outline (RGBA format) : default is check by team
     "target"  "3"                   // 0: Everyone, 1: Only Self, 2:Team, 3: Enemy Team, 4: Everyone besides self
 
     "plugin_name"	"ff2r_outline"
   }
 
+  "special_outline"
+  {
+    "target"  "3"                   // 0: Everyone, 1: Only Self, 2:Team, 3: Enemy Team, 4: Everyone besides self
+    "plugin_name"	"ff2r_outline"
+  }
+
+  // GONNA MAKE THIS ABILITY LATER
   "special_onhit_outline"
   {
     // warning: do not use this ability with other outline abilities
@@ -51,112 +49,182 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define PLUGIN_NAME 	"Freak Fortress 2 Rewrite: My Stock Subplugin"
-#define PLUGIN_AUTHOR 	"J0BL3SS"
-#define PLUGIN_DESC 	"It's a template ff2r subplugin"
-
-#define MAJOR_REVISION 	"1"
-#define MINOR_REVISION 	"0"
-#define STABLE_REVISION "1"
-#define PLUGIN_VERSION 	MAJOR_REVISION..."."...MINOR_REVISION..."."...STABLE_REVISION
-
-#define PLUGIN_URL ""
-
-#define MAXTF2PLAYERS	36
-
-public Plugin myinfo = 
+public Plugin myinfo =
 {
-	name 		= PLUGIN_NAME,
-	author 		= PLUGIN_AUTHOR,
-	description	= PLUGIN_DESC,
-	version 	= PLUGIN_VERSION,
-	url			= PLUGIN_URL,
+  name        = "Freak Fortress 2 Rewrite: Outline Subplugin",
+  author      = "M7, Zell",
+  description = "Standalone outline abilities for FF2:R bosses borrow code from M7",
+  version     = "1.0.0",
 };
+
+#define INACTIVE 100000000.0
+
+int   BossId;
+bool  IsRound;
+float EndOutline[MAXPLAYERS + 1];
+bool  HasSpecialOutline[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
-	for(int clientIdx = 1; clientIdx <= MaxClients; clientIdx++)
-	{
-		if(IsClientInGame(clientIdx))
-		{
-			OnClientPutInServer(clientIdx);
-			
-			BossData cfg = FF2R_GetBossData(clientIdx);	// Get boss config (known as boss index) from player
-			if(cfg)
-			{
-				FF2R_OnBossCreated(clientIdx, cfg, false);	// If boss is valid, Hook the abilities because this subplugin is most likely late-loaded
-			}
-		}
-	}
-}
-
-public void OnClientPutInServer(int clientIdx)
-{
-	// Check and apply stuff if boss abilities that can effect players is active
+  IsRound = false;
+  for (int i = 1; i <= MaxClients; i++)
+  {
+    EndOutline[i] = INACTIVE;
+		HasSpecialOutline[i] = false;
+  }
 }
 
 public void OnPluginEnd()
 {
-	for(int clientIdx = 1; clientIdx <= MaxClients; clientIdx++)
+  IsRound = false;
+  for (int i = 1; i <= MaxClients; i++)
+  {
+    EndOutline[i] = INACTIVE;
+  }
+}
+
+public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
+{
+  if (!setup || FF2R_GetGamemodeType() != 2)
+  {
+    AbilityData ability = cfg.GetAbility("special_outline");
+    if (ability.IsMyPlugin())
+    {
+      IsRound = true;  // Set the round state to true (this will handle when respawn needs to be done)
+			BossId = client;
+			for (int i = 1; i <= MaxClients; i++)
+      {
+        if (IsValidLivingClient(i) && IsTarget(client, i, ability.GetInt("target", 0)))
+        {
+          EndOutline[i] = GetEngineTime() + ability.GetFloat("duration", 10.0);
+					HasSpecialOutline[i] = true;
+					SetEntProp(i, Prop_Send, "m_bGlowEnabled", 1);
+          SDKHook(i, SDKHook_PreThink, Outline_Prethink);
+        }
+      }
+    }
+  }
+}
+
+public void OnClientPutInServer(int client)
+{
+  if (IsValidClient(client) && IsRound && IsTarget(BossId, client, 0))
 	{
-		// Clear everything from players, because FF2:R either disabled/unloaded or this subplugin unloaded
+		EndOutline[client] = INACTIVE;  // Reset the outline duration for the new player
+		HasSpecialOutline[client] = false;
+		SetEntProp(client, Prop_Send, "m_bGlowEnabled", 1);
 	}
+  {
+    SDKHook(client, SDKHook_PreThink, Outline_Prethink);
+  }
 }
 
-public void FF2R_OnBossCreated(int clientIdx, BossData cfg, bool setup)
+public void FF2R_OnBossRemoved(int client)
 {
-	/*
-	 * When boss created, hook the abilities etc.
-	 *
-	 * We no longer use RoundStart Event to hook abilities because bosses can be created trough 
-	 * manually by command in other gamemodes other than Arena or create bosses mid-round.
-	 *
-	 */
+  IsRound = false;  // Set the round state to false (this will handle when respawn needs to be done)
+  for (int i = 1; i <= MaxClients; i++)
+  {
+    if (IsValidClient(i))
+    {
+      EndOutline[client] = INACTIVE;
+    }
+  }
 }
 
-public void FF2R_OnBossRemoved(int clientIdx)
+public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 {
-	 /*
-	  * When boss removed (Died/Left the Game/New Round Started)
-	  * 
-	  * Unhook and clear ability effects from the plyaer/players
-	  *
-	  */
+  if (!cfg.IsMyPlugin())
+    return;
+
+  if (!StrContains(ability, "rage_outline", false))
+  {
+    for (int i = 1; i <= MaxClients; i++)
+    {
+      if (IsValidLivingClient(i) && IsTarget(client, i, cfg.GetInt("target", 0)))
+      {
+        EndOutline[i] = GetEngineTime() + cfg.GetFloat("duration", 10.0);
+        SetEntProp(i, Prop_Send, "m_bGlowEnabled", 1);
+        SDKHook(i, SDKHook_PreThink, Outline_Prethink);
+      }
+    }
+  }
 }
 
-public void FF2R_OnAbility(int clientIdx, const char[] ability, AbilityData cfg)
+public void Outline_Prethink(int client)
 {
-	//Just your classic stuff, when boss raged:
-	if(!cfg.IsMyPlugin())	// Incase of duplicated ability names with different plugins in boss config
-		return;
-	
-	if(!StrContains(ability, "rage_hinttext", false))	// We want to use subffixes
-	{
-		static char buffer[128];
-		cfg.GetString("message", buffer, sizeof(buffer));	// We use ConfigMap to Get string from "message" argument from ability
-		
-		if(buffer[0] != '\0') {
-			PrintHintText(clientIdx, buffer);
-		}
-		else {
-			PrintHintText(clientIdx, "fill up your \"message\" argument lol");
-		}			
+  OutlineTick(client, GetEngineTime());
+}
+
+public void OutlineTick(int client, flaot gameTime)
+{
+  if (!IsRound) {
+	  SetEntProp(i, Prop_Send, "m_bGlowEnabled", 0);
+    SDKUnhook(client, SDKHook_PreThink, Outline_Prethink);
 	}
+
+  if (gameTime >= EndOutline[client])
+  {
+    SetEntProp(i, Prop_Send, "m_bGlowEnabled", 0);
+    SDKUnhook(client, SDKHook_PreThink, Outline_Prethink);
+  }
 }
 
-stock bool IsValidClient(int clientIdx, bool replaycheck=true)
+stock bool IsTarget(int client, int target, int type)
 {
-	if(clientIdx <= 0 || clientIdx > MaxClients)
-		return false;
+  switch (type)
+  {
+    case 1:  // if target is boss,
+    {
+      if (client == target)
+        return true;
+      else return false;
+    }
+    case 2:  // if target's team same team as boss's team
+    {
+      if (GetClientTeam(target) == GetClientTeam(client))
+        return true;
+      else return false;
+    }
+    case 3:  // if target's team is not same team as boss's team
+    {
+      if (GetClientTeam(target) != GetClientTeam(client))
+        return true;
+      else return false;
+    }
+    case 4:  // if target is not boss
+    {
+      if (client != target)
+        return true;
+      else return false;
+    }
+    default:  // effect everyone
+    {
+      return true;
+    }
+  }
+}
 
-	if(!IsClientInGame(clientIdx) || !IsClientConnected(clientIdx))
-		return false;
+stock bool IsValidLivingClient(int client)
+{
+  if (IsValidClient(client) && IsPlayerAlive(client))
+    return true;
 
-	if(GetEntProp(clientIdx, Prop_Send, "m_bIsCoaching"))
-		return false;
+  return false;
+}
 
-	if(replaycheck && (IsClientSourceTV(clientIdx) || IsClientReplay(clientIdx)))
-		return false;
+stock bool IsValidClient(int client, bool replaycheck = true)
+{
+  if (client <= 0 || client > MaxClients)
+    return false;
 
-	return true;
+  if (!IsClientInGame(client) || !IsClientConnected(client))
+    return false;
+
+  if (GetEntProp(client, Prop_Send, "m_bIsCoaching"))
+    return false;
+
+  if (replaycheck && (IsClientSourceTV(client) || IsClientReplay(client)))
+    return false;
+
+  return true;
 }
