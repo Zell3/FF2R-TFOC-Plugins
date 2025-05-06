@@ -145,8 +145,8 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 {
   if (!setup || FF2R_GetGamemodeType() != 2)
   {
-		// reset kill count
-		Killcount[client] = 0;
+    // reset kill count
+    Killcount[client] = 0;
 
     // Clear existing data
     g_PassiveData[client].Clear();
@@ -255,6 +255,9 @@ public Action Event_OnPlayerDeath(Handle event, const char[] name, bool dontBroa
   if (attacker == victim)
     return Plugin_Continue;
 
+  if (!IsValidClient(victim, false) || !IsValidClient(attacker, false))
+    return Plugin_Continue;
+
   Killcount[attacker]++;
 
   if (g_State.passiveEnabled)
@@ -301,7 +304,7 @@ public void DarkRealmMultiplier_Prethink(int client)
     ShowSyncHudText(client, data.hud, "Kills: %i | Melee DMG x %.2f | Secondary DMG x %.2f | Primary DMG x %.2f",
                     Killcount[client],
                     meleeMultiplier, secondaryMultiplier, primaryMultiplier);
-}
+  }
 }
 
 public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
@@ -322,33 +325,34 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 
 public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3])
 {
-  if (attacker == victim)
-    return Plugin_Continue;
-
-  if (g_State.multiplierEnabled)
+  if (IsValidClient(victim) && IsValidClient(attacker) && victim != attacker)
   {
-    // check if the attacker is a boss and has the passive ability
-    BossData boss = FF2R_GetBossData(attacker);
-    if (boss && boss.GetAbility("darkrealm_damage_multiplier").IsMyPlugin())
+    if (g_State.multiplierEnabled)
     {
-      MultiplierData data;
-      g_MultiplierData[attacker].GetArray(0, data);
+      // check if the attacker is a boss and has the passive ability
+      BossData boss = FF2R_GetBossData(attacker);
+      if (boss && boss.GetAbility("darkrealm_damage_multiplier").IsMyPlugin())
+      {
+        MultiplierData data;
+        g_MultiplierData[attacker].GetArray(0, data);
 
-      if (weapon == GetPlayerWeaponSlot(attacker, TFWeaponSlot_Melee))
-      {
-        damage *= SafeCalculateMultiplier(data.meleeMultiplier, Killcount[attacker], data.meleeKills);
-      }
-      else if (weapon == GetPlayerWeaponSlot(attacker, TFWeaponSlot_Secondary))
-      {
-        damage *= SafeCalculateMultiplier(data.secondaryMultiplier, Killcount[attacker], data.secondaryKills);
-      }
-      else if (weapon == GetPlayerWeaponSlot(attacker, TFWeaponSlot_Primary))
-      {
-        damage *= SafeCalculateMultiplier(data.primaryMultiplier, Killcount[attacker], data.primaryKills);
+        if (weapon == GetPlayerWeaponSlot(attacker, TFWeaponSlot_Melee))
+        {
+          damage *= SafeCalculateMultiplier(data.meleeMultiplier, Killcount[attacker], data.meleeKills);
+        }
+        else if (weapon == GetPlayerWeaponSlot(attacker, TFWeaponSlot_Secondary))
+        {
+          damage *= SafeCalculateMultiplier(data.secondaryMultiplier, Killcount[attacker], data.secondaryKills);
+        }
+        else if (weapon == GetPlayerWeaponSlot(attacker, TFWeaponSlot_Primary))
+        {
+          damage *= SafeCalculateMultiplier(data.primaryMultiplier, Killcount[attacker], data.primaryKills);
+        }
       }
     }
+    return Plugin_Changed;
   }
-  return Plugin_Changed;
+  return Plugin_Continue;
 }
 
 stock bool IsValidClient(int clientIdx, bool replaycheck = true)
