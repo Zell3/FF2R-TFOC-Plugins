@@ -99,8 +99,6 @@ bool PRINT_DEBUG_INFO = true;
 // for getting things off the map that have an undesirable destruction delay (i.e. certain particle effects)
 float OFF_THE_MAP[3] = { 16383.0, 16383.0, -16383.0 };
 
-#define MAXTF2PLAYERS	MAXPLAYERS+1
-
 // this is very generous as really only VSH servers with the RTD mod would have this many
 // (RTD allows temporary sentries and permanent dispensers to be spawned by non-engineers)
 #define MAX_BUILDINGS 32
@@ -543,7 +541,7 @@ public bool CanHitThis(int entityhit, int mask, int data)
 	return true; // It didn't hit itself
 }
 
-public bool GetEmptyLocationHull(int client, float originalpos[3], float emptypos[3])
+public void GetEmptyLocationHull(int client, float originalpos[3], float emptypos[3])
 {
 	float mins[3];
 	float maxs[3];
@@ -753,13 +751,16 @@ public int SpawnWeapon(int client, char[] name, char[] attribute, int index, int
 
 	CloseHandle(weapon);
 	EquipPlayerWeapon(client, entity);
-	
+
 	// sarysa addition, since cheese's weapons are currently invisible
 	if (!visible)
 	{
 		SetEntProp(entity, Prop_Send, "m_iWorldModelIndex", -1);
-		//SetEntProp(entity, Prop_Send, "m_nModelIndexOverrides", -1, _, 0);
+		SetEntProp(entity, Prop_Send, "m_nModelIndexOverrides", -1, _, 0);
 		SetEntPropFloat(entity, Prop_Send, "m_flModelScale", 0.001);
+
+		// SetEntityRenderMode(entity, RENDER_TRANSCOLOR);
+    // SetEntityRenderColor(entity, 0, 0, 0, 0);
 	}
 	
 	return entity;
