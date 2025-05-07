@@ -28,6 +28,7 @@ public Plugin myinfo =
 };
 
 bool isOnStripMelee[MAXPLAYERS + 1];  // Check if the player is on strip to melee
+float g_flStripDuration[MAXPLAYERS + 1];  // Add this with other globals
 
 public void FF2R_OnBossRemoved(int client)
 {
@@ -93,6 +94,8 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 public void StripToMelee(int client, float duration)
 {
   isOnStripMelee[client] = true;
+  g_flStripDuration[client] = GetGameTime() + duration;
+  
   TF2_RemoveWeaponSlot(client, 0);
   TF2_RemoveWeaponSlot(client, 1);
   int iWeapon = GetPlayerWeaponSlot(client, 2);
@@ -100,18 +103,24 @@ public void StripToMelee(int client, float duration)
     SetEntPropEnt(client, Prop_Send, "m_hActiveWeapon", iWeapon, 0);
   TF2_RemoveWeaponSlot(client, 3);
   TF2_RemoveWeaponSlot(client, 4);
-
-  CreateTimer(duration, returnWeapons, client);
+  
+  SDKHook(client, SDKHook_PreThink, PreThink_StripMelee);
 }
 
-public Action returnWeapons(Handle timer, int client)
+public void PreThink_StripMelee(int client)
 {
-  if (IsValidClient(client) && isOnStripMelee[client])
+  if (!IsValidClient(client) || !isOnStripMelee[client])
+  {
+    SDKUnhook(client, SDKHook_PreThink, PreThink_StripMelee);
+    return;
+  }
+  
+  if (GetGameTime() >= g_flStripDuration[client])
   {
     isOnStripMelee[client] = false;
     TF2_RegeneratePlayer(client);
+    SDKUnhook(client, SDKHook_PreThink, PreThink_StripMelee);
   }
-  return Plugin_Continue;
 }
 
 stock bool IsValidLivingClient(int client)  // Checks if a client is a valid living one.
