@@ -1,9 +1,9 @@
 /*
-	"monochrome"
-	{
-		"target"	"1" // 1: Bosses, 2: Non-Bosses, 3: Everyone
-		"plugin_name"	"ff2r_monochromatic"
-	}
+  "monochrome"
+  {
+    "target"	"0" // 0 = Everyone, 1 = Only Boss, 2: Enemy Team
+    "plugin_name"	"ff2r_monochromatic"
+  }
 */
 
 #include <tf2>
@@ -13,151 +13,169 @@
 #include <sourcemod>
 #include <cfgmap>
 #include <ff2r>
+#include <vscript>
 
 #pragma semicolon 1
 #pragma newdecls required
 
-
-#define VERSION_NUMBER "1.0.1"
-
-public Plugin myinfo = {
-	name = "Freak Fortress 2 Rewrite: Monochromatic",
-	description = "The following has been brought to you in black and white",
-	author = "Koishi, Zell",
-	version = VERSION_NUMBER,
+public Plugin myinfo =
+{
+  name        = "Freak Fortress 2 Rewrite x VScript: Monochromatic",
+  description = "The following has been brought to you in black and white",
+  author      = "Koishi, Zell",
+  version     = "1.1.0",
 };
 
-int effectboss = 0;
-bool IsEnable = false;
+Handle g_SDKCallOverlay;
+bool   enable = false;
+int    bossId;
+int    targetType = 0;  // 0 = Everyone, 1 = Only Boss, 2: Enemy Team
 
-public void OnPluginStart() {
-	HookEvent("arena_win_panel", Event_RoundEnd);
-	HookEvent("teamplay_round_win", Event_RoundEnd); // for non-arena maps
-
-	for (int client = 1; client <= MaxClients; client++) {
-		if (IsClientInGame(client)) {
-			OnClientPutInServer(client);
-			
-			BossData cfg = FF2R_GetBossData(client);
-			if (cfg) {
-				FF2R_OnBossCreated(client, cfg, false);
-			}
-		}
-	}
-}
-
-public void FF2R_OnBossCreated(int client, BossData cfg, bool setup) {
-	if (!(!setup || FF2R_GetGamemodeType() != 2)) {
-		AbilityData ability = cfg.GetAbility("monochrome");
-		if (ability.IsMyPlugin())
-			PrepareOverlay(client, "monochrome", ability);
-	}
-}
-
-public void OnClientPutInServer(int target) {
-	if(!IsValidClient(target))
-		return;
-
-	if(IsEnable)
-	{
-		for(int client = 1; client <= MaxClients; client++)
-		{
-			BossData boss = FF2R_GetBossData(client);
-			if(boss)
-				if(TargetType(client, target))
-					CreateTimer(0.02, Monochrome_Prethink, target, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
-		}
-	}
-}
-
-
-stock void SetMonochrome(int client)
+// clear vscript variables
+public void OnAllPluginsLoaded()
 {
-	if(!IsValidClient(client))
-		return;
-	
-	int flags=GetCommandFlags("r_screenoverlay") & (~FCVAR_CHEAT);
-	SetCommandFlags("r_screenoverlay", flags);
-	ClientCommand(client, "r_screenoverlay \"%s\"", IsEnable ? "debug/yuv" : "");
+  if (VScript_IsScriptVMInitialized())
+    VScript_ResetScriptVM();
+}
+
+public void VScript_OnScriptVMInitialized()
+{
+  VScriptFunction pFunction;
+
+  pFunction = VScript_GetClassFunction("CBasePlayer", "SetScriptOverlayMaterial");
+  g_SDKCallOverlay = pFunction.CreateSDKCall();
+  if (g_SDKCallOverlay == null)
+    ThrowError("Failed to create SDK call for CBasePlayer::SetScriptOverlayMaterial");
+}
+
+public void OnPluginStart()
+{
+  HookEvent("arena_win_panel", Event_RoundEnd, EventHookMode_PostNoCopy);
+  HookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_PostNoCopy);
+}
+
+public void OnPluginEnd()
+{
+  if (g_SDKCallOverlay != null)
+  {
+    g_SDKCallOverlay.Close();
+    g_SDKCallOverlay = null;
+  }
+  // clear vscript variables
+  if (VScript_IsScriptVMInitialized())
+    VScript_ResetScriptVM();
+
+  // unhook events
+  bossId = 0;
+  enable = false;
+  UnhookEvent("arena_win_panel", Event_RoundEnd, EventHookMode_PostNoCopy);
+  UnhookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_PostNoCopy);
+}
+
+public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
+{
+  if (!(!setup || FF2R_GetGamemodeType() != 2))
+  {
+    AbilityData ability = cfg.GetAbility("monochrome");
+    if (ability.IsMyPlugin())
+    {
+      enable     = true;
+      bossId     = client;
+      targetType = ability.GetInt("target", 0);
+      for (int i = 1; i <= MaxClients; i++)
+      {
+        if (!IsValidClient(i))
+          continue;
+
+        if (TargetType(client, i, targetType))
+        {
+          SetMonochrome(i);
+        }
+      }
+    }
+  }
 }
 
 public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
-	IsEnable = false;
-	for(int target = 1; target <= MaxClients; target++)
-	{
-		if(!IsValidClient(target))
-			continue;
+  if (enable)
+  {
+    enable = false;
+    bossId = 0;
+    for (int i = 1; i <= MaxClients; i++)
+    {
+      if (!IsValidClient(i))
+        continue;
 
-		SetMonochrome(target);
-	}
+      ClearMonochrome(i);
+    }
+  }
 }
 
-public Action Monochrome_Prethink(Handle timer, int client) {
-	if(!IsValidClient(client))
-		return Plugin_Stop;
-
-	if(!IsEnable) {
-		SetMonochrome(client);
-		return Plugin_Stop;
-	}
-	SetMonochrome(client);
-	return Plugin_Continue;
-}
-
-public void PrepareOverlay(int client, const char[] ability_name, AbilityData ability) {
-	IsEnable = true;
-	effectboss = ability.GetInt("target", 0);
-	for(int target = 1; target <= MaxClients; target++)
-	{
-		if(!IsValidClient(target))
-			continue;
-
-		if(TargetType(client, target))
-			CreateTimer(0.02, Monochrome_Prethink, target, TIMER_REPEAT|TIMER_FLAG_NO_MAPCHANGE);
-	}
-}
-
-stock bool TargetType(int client, int target)
+public void OnClientPutInServer(int client)
 {
-	switch(effectboss)
-	{
-		case 1: // if target is boss,
-		{
-			if(client == target)		
-				return true;
-			else return false;
-		}
-		case 2: // if target's team is not same team as boss's team
-		{
-			if(GetClientTeam(target) != GetClientTeam(client)) 
-				return true;
-			else return false;
-		}
-		case 3:
-		{
-			return true;
-		}
-		default: // effect everyone
-		{
-			return false;	
-		}
-	}
+  if (!IsValidClient(client))
+    return;
+  if (enable && TargetType(bossId, client, targetType))
+  {
+    SetMonochrome(client);
+  }
 }
 
-stock bool IsValidClient(int client, bool replaycheck=true)
+public void SetMonochrome(int client)
 {
-	if(client <= 0 || client > MaxClients)
-		return false;
+  if (g_SDKCallOverlay == null)
+    return;
+  // call vscript function to set overlay material be "debug/yuv"
+  SDKCall(g_SDKCallOverlay, client, "debug/yuv");
+}
 
-	if(!IsClientInGame(client) || !IsClientConnected(client))
-		return false;
+public void ClearMonochrome(int client)
+{
+  if (g_SDKCallOverlay == null)
+    return;
 
-	if(GetEntProp(client, Prop_Send, "m_bIsCoaching"))
-		return false;
+  SDKCall(g_SDKCallOverlay, client, "");
+  // clear VScript
+	
+}
 
-	if(replaycheck && (IsClientSourceTV(client) || IsClientReplay(client)))
-		return false;
+stock bool TargetType(int client, int target, int type)
+{
+  switch (type)
+  {
+    case 1:  // if target is boss
+    {
+      if (client == target)
+        return true;
+      else return false;
+    }
+    case 2:  // if target's team is not same team as boss's team
+    {
+      if (GetClientTeam(client) != GetClientTeam(target))
+        return true;
+      else return false;
+    }
+    default:  // if target is everyone
+    {
+      return true;
+    }
+  }
+}
 
-	return true;
-}	
+stock bool IsValidClient(int client, bool replaycheck = true)
+{
+  if (client <= 0 || client > MaxClients)
+    return false;
+
+  if (!IsClientInGame(client) || !IsClientConnected(client))
+    return false;
+
+  if (GetEntProp(client, Prop_Send, "m_bIsCoaching"))
+    return false;
+
+  if (replaycheck && (IsClientSourceTV(client) || IsClientReplay(client)))
+    return false;
+
+  return true;
+}
