@@ -202,6 +202,9 @@ public void OnPluginStart() {
 			}
 		}
 	}
+
+	HookEvent("arena_win_panel", Event_RoundEnd, EventHookMode_PostNoCopy);
+  HookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_PostNoCopy);
 }
 
 public void FF2R_OnBossCreated(int client, BossData cfg, bool setup) {
@@ -236,6 +239,9 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup) {
 }
 
 public void OnPluginEnd() {
+  UnhookEvent("arena_win_panel", Event_RoundEnd, EventHookMode_PostNoCopy);
+  UnhookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_PostNoCopy);
+
 	for (int client = 1; client <= MaxClients; client++) {
 		if (IsClientInGame(client) && FF2R_GetBossData(client)) {
 			FF2R_OnBossRemoved(client);
@@ -359,6 +365,16 @@ public void FF2R_OnBossRemoved(int client) {
 			RemoveDOTOverlay(clientIdx);
 	}
 }
+
+public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
+{
+	for (int client = 1; client <= MaxClients; client++) {
+		if (IsClientInGame(client) && FF2R_GetBossData(client)) {
+			FF2R_OnBossRemoved(client);
+		}
+	}
+}
+
 
 public void CancelDOTAbilityActivation(int clientIdx)
 {
