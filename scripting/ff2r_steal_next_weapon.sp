@@ -13,6 +13,7 @@
   "scout_level"				  ""						// Weapon level
   "scout_quality"			  ""						// Weapon quality
   "scout_rank"				  ""						// Weapon strange rank
+  "scout_preserve"      ""            // Weapon preserve attribute (0 = no, 1 = yes)
   "scout_show"				  ""						// Weapon visibility
 
   "soldier_classname"   ""            // classname of the weapon to be stolen
@@ -21,9 +22,8 @@
   "soldier_level"				""						// Weapon level
   "soldier_quality"			""						// Weapon quality
   "soldier_rank"				""						// Weapon strange rank
+  "soldier_preserve"      ""            // Weapon preserve attribute (0 = no, 1 = yes)
   "soldier_show"				""						// Weapon visibility
-  "soldier_lifetime"    "15.0"        // lifetime of acquired weapon. set to 0.0 to keep it forever. (or until replaced)
-  "soldier_suppression" "15.0"        // slot suppression duration for the victim
 
   // and so on for all classes
 }
@@ -121,7 +121,8 @@ public void FF2R_OnAbility(int clientIdx, const char[] ability, AbilityData cfg)
 
     for (int i = 1; i < 9; i++)
     {
-      char class[64] class = GetClassStringByIndex(i);
+      char class[64];
+      class = GetClassStringByIndex(i);
 
       NewWeaponData weapon;
 
