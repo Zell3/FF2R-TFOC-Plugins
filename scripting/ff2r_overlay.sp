@@ -1,5 +1,4 @@
 /*
-  // current
   "rage_overlay" // Ability name can use suffixes
   {
     "slot" "0"
@@ -9,8 +8,9 @@
     "range" "9999"
     "target" "0" // 0: Everyone, 1: Only Self, 2:Team, 3: Enemy Team, 4: Everyone besides self
 
-    plugin_name "ff2r_overlay"
+    "plugin_name" "ff2r_overlay"
   }
+
   "start_overlay"
   {
     "delay" "5.0"
@@ -18,22 +18,7 @@
     "duration" "5.0"
     "range" "9999"
     "target" "0" // 0: Everyone, 1: Only Self, 2:Team, 3: Enemy Team, 4: Everyone besides self
-    plugin_name "ff2r_overlay"
-  }
-
-  // future plans if it needed
-  "kill_overlay"
-  {
-    "path" "draqz/ff2/qwerty/overlay"
-    "duration" "5.0"
-    plugin_name "ff2r_overlay"
-  }
-
-  "end overlay"
-  {
-    "path" "draqz/ff2/qwerty/overlay"
-    "duration" "5.0"
-    plugin_name "ff2r_overlay"
+    "plugin_name" "ff2r_overlay"
   }
 */
 
