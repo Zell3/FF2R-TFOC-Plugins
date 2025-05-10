@@ -132,15 +132,8 @@ float  afterBurnDuration;
 
 // Scaling
 float  oldScale[MAXPLAYERS + 1];
-
-// Scale Boss
-float  BossScale;
-float  BossDuration;
-
-// Scale Players
-float  PlayerScale;
-float  PlayerDuration;
-float  PlayerDistance;
+float  PlayerScale[MAXPLAYERS + 1];
+float  PlayerDuration[MAXPLAYERS + 1];
 
 // Drown
 float  DrownDuration;
@@ -213,17 +206,12 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 
     for (int i = 1; i <= MaxClients; i++)
     {
-      if (!IsValidClient(i))
-        continue;
-      oldScale[i] = 1.0;
+      oldScale[i]       = 1.0;
+      PlayerDuration[i] = INACTIVE;
     }
 
     // Delirium
     DeliriumDuration    = INACTIVE;
-    // Scale Boss
-    BossDuration        = INACTIVE;
-    // Scale Players
-    PlayerDuration      = INACTIVE;
     // Drown
     DrownDuration       = INACTIVE;
     // Visualeffects
@@ -247,20 +235,15 @@ public void FF2R_OnBossRemoved(int clientIdx)
 
   for (int client = 1; client <= MaxClients; client++)
   {
-    if (IsValidClient(client))
-    {
-      oldScale[client] = 1.0;
-      // Delirium
-      DeliriumDuration = INACTIVE;
-      // Scale Boss
-      BossDuration     = INACTIVE;
-      // Scale Players
-      PlayerDuration   = INACTIVE;
-      // Drown
-      DrownDuration    = INACTIVE;
-      // Visualeffects
-      EffectDuration   = INACTIVE;
-    }
+    oldScale[client]       = 1.0;
+    // Delirium
+    DeliriumDuration       = INACTIVE;
+    // Scale Boss & Players
+    PlayerDuration[client] = INACTIVE;
+    // Drown
+    DrownDuration          = INACTIVE;
+    // Visualeffects
+    EffectDuration         = INACTIVE;
   }
 }
 
@@ -484,77 +467,87 @@ public Action SetExplosion(Handle timer, Handle data)
 
 public void Rage_ScaleBoss(int clientIdx, const char[] ability, AbilityData cfg)
 {
-  oldScale[clientIdx] = GetEntPropFloat(clientIdx, Prop_Send, "m_flModelScale");
-  BossScale           = cfg.GetFloat("scale");  // scale
+  oldScale[clientIdx]    = GetEntPropFloat(clientIdx, Prop_Send, "m_flModelScale");
+  PlayerScale[clientIdx] = cfg.GetFloat("scale");  // scale
 
-  if (BossScale != oldScale[clientIdx])
+  if (PlayerScale[clientIdx] != oldScale[clientIdx])
   {
-    if (BossScale > oldScale[clientIdx])
+    if (PlayerScale[clientIdx] > oldScale[clientIdx])
     {
       float curpos[3];
       GetEntPropVector(clientIdx, Prop_Data, "m_vecOrigin", curpos);
-      if (!IsSpotSafe(clientIdx, curpos, BossScale))
+      if (!IsSpotSafe(clientIdx, curpos, PlayerScale[clientIdx]))
       {
-        PrintHintText(clientIdx, "You were not resized %f times to avoid getting stuck!", BossScale);
-        LogError("[PhatRages] %N was not resized %f times to avoid getting stuck!", clientIdx, BossScale);
+        PrintHintText(clientIdx, "You were not resized %f times to avoid getting stuck!", PlayerScale[clientIdx]);
+        LogError("[PhatRages] %N was not resized %f times to avoid getting stuck!", clientIdx, PlayerScale[clientIdx]);
         return;
       }
     }
 
-    SetEntPropFloat(clientIdx, Prop_Send, "m_flModelScale", BossScale);
+    SetEntPropFloat(clientIdx, Prop_Send, "m_flModelScale", PlayerScale[clientIdx]);
     if (isHitBoxAvailable)
-      UpdatePlayerHitbox(clientIdx, BossScale);
+      UpdatePlayerHitbox(clientIdx, PlayerScale[clientIdx]);
+
+    if (PlayerDuration[clientIdx] != INACTIVE)
+      PlayerDuration[clientIdx] += cfg.GetFloat("duration");
+    else
+      PlayerDuration[clientIdx] = GetEngineTime() + cfg.GetFloat("duration");  // duration
 
     SDKHook(clientIdx, SDKHook_PreThink, Scale_Prethink);
-    if (BossDuration != INACTIVE)
-      BossDuration = cfg.GetFloat("duration");
-    else
-      BossDuration = GetEngineTime() + cfg.GetFloat("duration");  // duration
   }
 }
 
 public void Rage_ScalePlayers(int clientIdx, const char[] ability, AbilityData cfg)
 {
-  PlayerScale = cfg.GetFloat("scale");  // scale
-  if (PlayerDuration != INACTIVE)
-    PlayerDuration += cfg.GetFloat("duration");  // duration
-  else
-    PlayerDuration = GetEngineTime() + cfg.GetFloat("duration");  // duration
-  PlayerDistance = cfg.GetFloat("range");                         // range
+  float scale    = cfg.GetFloat("scale");
+
+  float duration = cfg.GetFloat("duration");  // duration
+
+  float range = cfg.GetFloat("range");  // range
 
   float pos[3];
   float pos2[3];
 
+  // get boss position
   GetEntPropVector(clientIdx, Prop_Send, "m_vecOrigin", pos);
+
+  // get player in range but not boss
   for (int i = 1; i <= MaxClients; i++)
   {
     if (IsClientInGame(i) && IsPlayerAlive(i) && GetClientTeam(i) != GetClientTeam(clientIdx))
     {
       GetEntPropVector(i, Prop_Send, "m_vecOrigin", pos2);
-      if ((GetVectorDistance(pos, pos2) < PlayerDistance))
+      if ((GetVectorDistance(pos, pos2) < range))
       {
-        oldScale[i] = GetEntPropFloat(i, Prop_Send, "m_flModelScale");
-        if (PlayerScale != oldScale[i])
+        oldScale[i]    = GetEntPropFloat(i, Prop_Send, "m_flModelScale");
+        PlayerScale[i] = scale;
+        if (PlayerScale[i] != oldScale[i])
         {
-          if (PlayerScale > oldScale[i])
+          if (PlayerScale[i] > oldScale[i])
           {
             float curpos[3];
             GetEntPropVector(i, Prop_Data, "m_vecOrigin", curpos);
-            if (!IsSpotSafe(i, curpos, PlayerScale))
+            if (!IsSpotSafe(i, curpos, PlayerScale[i]))
             {
-              PrintHintText(i, "You were not resized %f times to avoid getting stuck!", PlayerScale);
-              LogError("[PhatRages] %N was not resized %f times to avoid getting stuck!", i, PlayerScale);
+              PrintHintText(i, "You were not resized %f times to avoid getting stuck!", PlayerScale[i]);
+              LogError("[PhatRages] %N was not resized %f times to avoid getting stuck!", i, PlayerScale[i]);
               return;
             }
           }
 
           if (isHitBoxAvailable)
           {
-            UpdatePlayerHitbox(i, PlayerScale);
+            UpdatePlayerHitbox(i, PlayerScale[i]);
           }
 
+          SetEntPropFloat(i, Prop_Send, "m_flModelScale", PlayerScale[i]);
+
+          if (PlayerDuration[i] != INACTIVE)
+            PlayerDuration[i] += duration;
+          else
+            PlayerDuration[i] = GetEngineTime() + duration;
+
           SDKHook(i, SDKHook_PreThink, Scale_Prethink);
-          SetEntPropFloat(i, Prop_Send, "m_flModelScale", PlayerScale);
         }
       }
     }
@@ -568,54 +561,28 @@ public void Scale_Prethink(int client)
 
 public void ScaleTick(int client, float gameTime)
 {
-  if (gameTime >= PlayerDuration)
+  if (gameTime >= PlayerDuration[client] || PlayerDuration[client] == INACTIVE)
   {
-    PlayerDuration = INACTIVE;
-    for (int i = 1; i <= MaxClients; i++)
+    PlayerDuration[client] = INACTIVE;
+    if (IsClientInGame(client))
     {
-      if (IsClientInGame(i))
-      {
-        SDKUnhook(i, SDKHook_PreThink, Scale_Prethink);
+      SDKUnhook(client, SDKHook_PreThink, Scale_Prethink);
 
-        if (oldScale[client] > PlayerScale)
+      if (oldScale[client] > PlayerScale[client])
+      {
+        float curpos[3];
+        GetEntPropVector(client, Prop_Data, "m_vecOrigin", curpos);
+        if (!IsSpotSafe(client, curpos, oldScale[client]))
         {
-          float curpos[3];
-          GetEntPropVector(i, Prop_Data, "m_vecOrigin", curpos);
-          if (!IsSpotSafe(i, curpos, oldScale[i]))
-          {
-            PrintHintText(i, "You were not resized %f times to avoid getting stuck!", oldScale[i]);
-            LogError("[PhatRages] %N was not resized %f times to avoid getting stuck!", i, oldScale[i]);
-            return;
-          }
+          PrintHintText(client, "You were not resized %f times to avoid getting stuck!", oldScale[client]);
+          LogError("[PhatRages] %N was not resized %f times to avoid getting stuck!", client, oldScale[client]);
+          return;
         }
-
-        SetEntPropFloat(i, Prop_Send, "m_flModelScale", oldScale[i]);
-        if (isHitBoxAvailable)
-          UpdatePlayerHitbox(i, oldScale[i]);
       }
-    }
-  }
-  if (gameTime >= BossDuration)
-  {
-    BossDuration = INACTIVE;
-    SDKUnhook(client, SDKHook_PreThink, Scale_Prethink);
 
-    if (oldScale[client] > BossScale)
-    {
-      float curpos[3];
-      GetEntPropVector(client, Prop_Data, "m_vecOrigin", curpos);
-      if (!IsSpotSafe(client, curpos, oldScale[client]))
-      {
-        PrintHintText(client, "You were not resized %f times to avoid getting stuck!", oldScale[client]);
-        LogError("[PhatRages] %N was not resized %f times to avoid getting stuck!", client, oldScale[client]);
-        return;
-      }
-    }
-
-    SetEntPropFloat(client, Prop_Send, "m_flModelScale", oldScale[client]);
-    if (isHitBoxAvailable)
-    {
-      UpdatePlayerHitbox(client, oldScale[client]);
+      SetEntPropFloat(client, Prop_Send, "m_flModelScale", oldScale[client]);
+      if (isHitBoxAvailable)
+        UpdatePlayerHitbox(client, oldScale[client]);
     }
   }
 }
