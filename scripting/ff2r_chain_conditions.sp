@@ -14,12 +14,12 @@
   }
 */
 
-#include <tf2>
 #include <sourcemod>
 #include <cfgmap>
 #include <ff2r>
 #include <sdkhooks>
 #include <sdktools>
+#include <tf2>
 #include <tf2_stocks>
 
 #pragma semicolon 1
@@ -108,10 +108,10 @@ public void ChainPreThink(int client)
   float conditionDuration = g_flConditionDuration[client];
 
   // Check if enough time has passed since last application
-  if (TF2_IsPlayerInCondition(client, conditionTrigger) && GetEngineTime() >= g_flLastApplied[client])
+  if (TF2_IsPlayerInCondition(client, view_as<TFCond>(conditionTrigger)) && GetEngineTime() >= g_flLastApplied[client])
   {
     if (keepCondition == 0)
-      TF2_RemoveCondition(client, conditionTrigger);
+      TF2_RemoveCondition(client, view_as<TFCond>(conditionTrigger));
 
     if (conditionApply == -1)
       TF2_IgnitePlayer(client, client, conditionDuration);
@@ -122,7 +122,7 @@ public void ChainPreThink(int client)
     else if (conditionApply == -4)
       SDKHooks_TakeDamage(client, client, client, GetClientHealth(client)*10.0, (DMG_ALWAYSGIB | DMG_CRIT | DMG_BLAST));
     else
-      TF2_AddCondition(client, conditionApply, conditionDuration);
+      TF2_AddCondition(client, view_as<TFCond>(conditionApply), conditionDuration);
 
     g_flLastApplied[client] = GetEngineTime() + conditionDuration;
   }
