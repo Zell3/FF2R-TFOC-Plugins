@@ -158,14 +158,6 @@ public void FF2R_OnBossRemoved(int client)
 
 public void ChainPreThink(int client)
 {
-  if (!IsValidLivingClient(client))
-  {
-    g_flRageDuration[client] = INACTIVE;
-    g_ConditionSets[client].Clear();
-    SDKUnhook(client, SDKHook_PreThink, ChainPreThink);
-    return;
-  }
-
   if (GetEngineTime() > g_flRageDuration[client] || g_flRageDuration[client] == INACTIVE)
   {
     g_flRageDuration[client] = INACTIVE;
@@ -173,6 +165,9 @@ public void ChainPreThink(int client)
     SDKUnhook(client, SDKHook_PreThink, ChainPreThink);
     return;
   }
+
+  if (!IsValidLivingClient(client))
+    return;
 
   int size = g_ConditionSets[client].Length;
   for (int i = 0; i < size; i++)
