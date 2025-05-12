@@ -333,10 +333,14 @@ stock void RemoveReanimator(int client)  // Removes a revive marker
 
 public void MoveMarker(int client)
 {
-  float position[3];
-  GetEntPropVector(client, Prop_Send, "m_vecOrigin", position);
-  if (IsValidMarker(g_Players[client].reviveMarker))
-    TeleportEntity(g_Players[client].reviveMarker, position, NULL_VECTOR, NULL_VECTOR);
+    float position[3];
+    GetEntPropVector(client, Prop_Send, "m_vecOrigin", position);
+    
+    // Add vertical offset (48.0 units is approximately player torso height)
+    position[2] += 48.0;
+    
+    if (IsValidMarker(g_Players[client].reviveMarker))
+        TeleportEntity(g_Players[client].reviveMarker, position, NULL_VECTOR, NULL_VECTOR);
 }
 
 stock bool IsValidClient(int clientIdx, bool replaycheck = true)
@@ -393,9 +397,9 @@ stock void AddCondition(int clientIdx, char[] conditions)
   {
     for (int i = 0; i < count; i += 2)
     {
-      if (!TF2_IsPlayerInCondition(clientIdx, view_as<TFCond>(StringToInt(conds[i]))))
+      if (!TF2_IsPlayerInCondition(clientIdx, StringToInt(conds[i])))
       {
-        TF2_AddCondition(clientIdx, view_as<TFCond>(StringToInt(conds[i])), StringToFloat(conds[i + 1]));
+        TF2_AddCondition(clientIdx, StringToInt(conds[i]), StringToFloat(conds[i + 1]));
         // if view_as<TFCond> and plugin doesn't work then use this line instead
         // TF2_AddCondition(clientIdx, StringToInt(conds[i]), StringToFloat(conds[i + 1]));
 
