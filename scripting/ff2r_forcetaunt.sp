@@ -5,7 +5,6 @@
 
       "id" ""
       "repeat" "1"  // 0: No repeat, 1: Repeat once, 2: Repeat twice, etc.
-      "interval" "0.0" // interval between taunts that repeat
       "target" "3" // 0: Everyone, 1: Only Self, 2:Team, 3: Enemy Team, 4: Everyone besides self
       "range" "9999.0" // range
 
@@ -26,7 +25,10 @@
 
 #define DEFINDEX_UNDEFINED 65535
 
-int repeat[MAXPLAYERS + 1];  // maxdances for taunts per player
+int  g_iTauntRepeat[MAXPLAYERS + 1];
+int  g_iTauntId[MAXPLAYERS + 1];
+bool g_bDoSlot[MAXPLAYERS + 1];
+int  g_iDoSlotNum[MAXPLAYERS + 1];
 
 public Plugin myinfo =
 {
@@ -36,58 +38,84 @@ public Plugin myinfo =
 
 public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 {
-  // Just your classic stuff, when boss raged:
-  if (!cfg.IsMyPlugin())  // Incase of duplicated ability names with different plugins in boss config
-    return;
-
-  if (!StrContains(ability, "rage_forcetaunt", false) && cfg.IsMyPlugin())
+  if (cfg.IsMyPlugin() && !StrContains(ability, "rage_forcetaunt", false))
   {
-    int   id       = cfg.GetInt("id", 0);
-    int   target   = cfg.GetInt("target", 0);        // 0: Everyone, 1: Only Self, 2:Team, 3: Enemy Team, 4: Everyone besides self
-    int   repeater = cfg.GetInt("repeat", 1);        // 0: No repeat, 1: Repeat once, 2: Repeat twice, etc.
-    float range    = cfg.GetFloat("range", 9999.0);  // 9999 is the default value for range (and it's roundstart soooo it doesn't matter)
-    float interval = cfg.GetFloat("interval", 0.0);  // interval between taunts that repeat
+    // Get and validate parameters
+    int   id     = cfg.GetInt("id", 0);
+    int   target = cfg.GetInt("target", 0);
+    int   repeat = cfg.GetInt("repeat", 0);
+    float range  = cfg.GetFloat("range", 9999.0);
+
+    // Store the ability handle for DoSlot after taunt
+    int   doslot = cfg.GetInt("doslot", -2);
 
     float pos[3], pos2[3];
     GetEntPropVector(client, Prop_Send, "m_vecOrigin", pos);
 
     for (int i = 1; i <= MaxClients; i++)
     {
-      if (IsValidLivingClient(i) && IsTarget(client, i, target))
-      {
-        GetEntPropVector(i, Prop_Send, "m_vecOrigin", pos2);
+      // clear data
+      g_iTauntId[i]     = 0;
+      g_iTauntRepeat[i] = 0;
+      g_bDoSlot[i]      = false;
+      g_iDoSlotNum[i]   = -2;
 
-        if (GetVectorDistance(pos, pos2) <= range)
+      if (!IsValidLivingClient(i))
+        continue;
+
+      if (i == client)
+      {
+        if (doslot != -2)
         {
-          PlayTaunt(i, id);
-          if (repeater > 0)
-          {
-            repeat[i] = repeater;
-            DataPack pack;
-            CreateDataTimer(interval, LoopTaunt, pack, TIMER_REPEAT | TIMER_FLAG_NO_MAPCHANGE);
-            pack.WriteCell(i);  // clientIdx
-            pack.WriteCell(id);
-          }
+          g_bDoSlot[client]      = true;
+          g_iDoSlotNum[client]   = doslot;
+          g_iTauntId[client]     = id;
+          g_iTauntRepeat[client] = repeat;
+
+          // force player to taunt no matter what it is if have doslot
+          SDKHook(client, SDKHook_PreThink, OnPlayerPreThink);
+          continue;
         }
       }
+
+      if (!IsTarget(client, i, target))
+        continue;
+
+      GetEntPropVector(i, Prop_Send, "m_vecOrigin", pos2);
+      if (GetVectorDistance(pos, pos2) > range)
+        continue;
+
+      // Setup initial taunt with waiting
+      g_iTauntId[i]     = id;
+      g_iTauntRepeat[i] = repeat;
+
+      SDKHook(i, SDKHook_PreThink, OnPlayerPreThink);
     }
   }
 }
 
-public Action LoopTaunt(Handle hTimer, DataPack pack)
+public void OnPlayerPreThink(int client)
 {
-  pack.Reset();
-  int clientIdx = pack.ReadCell();
-  int id        = pack.ReadCell();
-
-  if (repeat[clientIdx] <= 0 || !IsValidLivingClient(clientIdx))
+  if (!IsValidLivingClient(client))
   {
-    return Plugin_Stop;
+    SDKUnhook(client, SDKHook_PreThink, OnPlayerPreThink);
+    g_iTauntId[client]     = 0;
+    g_iTauntRepeat[client] = 0;
+    return;
   }
 
-  PlayTaunt(clientIdx, id);
+  if (g_iTauntRepeat[client] < 0)
+  {
+    SDKUnhook(client, SDKHook_PreThink, OnPlayerPreThink);
+    g_iTauntId[client]     = 0;
+    g_iTauntRepeat[client] = 0;
+    return;
+  }
 
-  return Plugin_Continue;
+  if (!IsValidTauntTarget(client))
+    return;
+
+  PlayTaunt(client, g_iTauntId[client]);
 }
 
 public void PlayTaunt(int iClient, int iTauntIndex)
@@ -143,15 +171,31 @@ public void PlayTaunt(int iClient, int iTauntIndex)
   // Remove the entity after playing the taunt
   RemoveEntity(iEntity);
 
-  // decrese repeat count
-  if (repeat[iClient] > 0)
+  // Decrement repeat count
+  g_iTauntRepeat[iClient]--;
+
+  // If we have a doslot pending and this is the last/only taunt
+  if (g_bDoSlot[iClient] && g_iTauntRepeat[iClient] < 0)
   {
-    repeat[iClient]--;
-    if (repeat[iClient] <= 0)
-    {
-      repeat[iClient] = 0;
-    }
+    // Start checking for taunt end immediately
+    CreateTimer(3.0, Timer_CheckTauntEnd, GetClientUserId(iClient), TIMER_FLAG_NO_MAPCHANGE);
   }
+}
+
+public Action Timer_CheckTauntEnd(Handle timer, any userid)
+{
+  int client = GetClientOfUserId(userid);
+
+  if (!IsValidLivingClient(client) || !g_bDoSlot[client])
+  {
+    g_bDoSlot[client]    = false;
+    g_iDoSlotNum[client] = -2;
+    return Plugin_Stop;
+  }
+
+  FF2R_DoBossSlot(client, g_iDoSlotNum[client]);
+
+  return Plugin_Continue;
 }
 
 /*
@@ -187,6 +231,19 @@ stock bool IsValidAddress(Address pAddress)
   return pAddress != Address_Null;
 }
 
+stock bool IsValidTauntTarget(int client)
+{
+  // Check if player is on ground
+  if (!(GetEntityFlags(client) & FL_ONGROUND))
+    return false;
+
+  // Check if player is already taunting
+  if (TF2_IsPlayerInCondition(client, TFCond_Taunting))
+    return false;
+
+  return true;
+}
+
 stock bool IsValidLivingClient(int clientIdx, bool replaycheck = true)
 {
   if (clientIdx <= 0 || clientIdx > MaxClients)
@@ -195,13 +252,13 @@ stock bool IsValidLivingClient(int clientIdx, bool replaycheck = true)
   if (!IsClientInGame(clientIdx) || !IsClientConnected(clientIdx))
     return false;
 
-  if (!IsPlayerAlive(clientIdx))
-    return false;
-
   if (GetEntProp(clientIdx, Prop_Send, "m_bIsCoaching"))
     return false;
 
   if (replaycheck && (IsClientSourceTV(clientIdx) || IsClientReplay(clientIdx)))
+    return false;
+
+  if (!IsPlayerAlive(clientIdx))
     return false;
 
   return true;
