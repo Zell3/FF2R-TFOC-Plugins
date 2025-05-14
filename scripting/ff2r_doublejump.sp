@@ -1,232 +1,205 @@
 /*
-	"passive_doublejump"
-	{
-		"target"        "1"             // 0: Everyone, 1: Boss, 2: Boss Team, 3: Enemy Team, 4: Except boss
-		"velocity"		"250.0"         // Velocity
-		"max"		    "1"             // Max of extra jump
-		"plugin_name"	"ff2r_doublejump"
-	}
-
-	"rage_doublejump"	// Ability name can use suffixes
-	{
-		"slot"			"0"             // Ability Slot
-		"duration"      "10.0"          // Duration
-		"target"        "1"             // 0: Everyone, 1: Boss, 2: Boss Team, 3: Enemy Team, 4: Except boss
-		"velocity"		"250.0"         // Velocity
-		"max"		    "1"             // Max of extra jump
-		"plugin_name"	"ff2r_doublejump"
-	}
+  "rage_doublejump"	// Ability name can use suffixes
+  {
+    "slot"					"0"						// Ability Slot
+    "duration"      "10.0"				// Duration
+    "target"        "1"						// 0: Everyone, 1: Boss, 2: Boss Team, 3: Enemy Team, 4: Except boss
+    "velocity"			"250.0"				// Velocity
+    "max"		    		"1"						// Max of extra jump
+    "plugin_name"		"ff2r_doublejump"
+  }
 */
 
 #include <sourcemod>
 #include <cfgmap>
 #include <ff2r>
 #include <sdktools>
+#include <sdkhooks>
+#include <tf2>
+#include <tf2_stocks>
 
 #pragma semicolon 1
 #pragma newdecls required
 
-public Plugin myinfo = {
-	name = "[FF2R] Double Jump",
-	author = "Paegus, Zell",
-	description = "Doublejump!!!!",
-	version = "1.0.0",
-	url = "http://203.159.92.45/donate/"
+#define INACTIVE 100000000.0
+
+public Plugin myinfo =
+{
+  name        = "[FF2R] Double Jump",
+  author      = "Paegus, Zell",
+  description = "Doublejump!!!!",
+  version     = "1.1.0",
 };
 
-bool isActive;
-bool IsTarget[MAXPLAYERS+1];
-float g_flBoost[MAXPLAYERS+1];
-int g_fLastButtons[MAXPLAYERS+1];
-int g_fLastFlags[MAXPLAYERS+1];
-int g_iJumps[MAXPLAYERS+1];
-int g_iJumpMax[MAXPLAYERS+1];
-int g_target;
+float g_flBoost[MAXPLAYERS + 1];
+int   g_fLastButtons[MAXPLAYERS + 1];
+int   g_fLastFlags[MAXPLAYERS + 1];
+int   g_iJumps[MAXPLAYERS + 1];
+int   g_iJumpMax[MAXPLAYERS + 1];
+bool  g_bIsTarget[MAXPLAYERS + 1];
 
-public void OnPluginStart() {
-	for (int client = 1; client <= MaxClients; client++) {
-		IsTarget[client] = false;
-		if (IsClientInGame(client)) {
-			OnClientPutInServer(client);
+float g_fDuration[MAXPLAYERS + 1];
 
-			BossData cfg = FF2R_GetBossData(client);
-			if (cfg) {
-				FF2R_OnBossCreated(client, cfg, false);
-			}
-		}
-	}
-}
-
-public void OnPluginEnd() {
-	for (int client = 1; client <= MaxClients; client++) {
-		if (IsClientInGame(client) && FF2R_GetBossData(client)) {
-			FF2R_OnBossRemoved(client);
-		}
-	}
-}
-
-public void OnClientPutInServer(int target) {
-	if(!isActive)
-		return;
-
-	for (int client = 1; client <= MaxClients; client++)
-		if (IsClientInGame(client) && FF2R_GetBossData(client))
-			if(IsClientTarget(client, target, g_target))
-				IsTarget[target] = true;
-}
-
-public void FF2R_OnBossCreated(int client, BossData cfg, bool setup) {
-	if (!setup || FF2R_GetGamemodeType() != 2) {
-		AbilityData ability = cfg.GetAbility("passive_doublejump");
-		if (ability.IsMyPlugin()) {
-			isActive = true;
-			g_target = ability.GetInt("target", 0);
-
-			for (int target = 1; target <= MaxClients; target++) {
-				if(IsValidClient(target)) {
-					if(IsClientTarget(client, target, g_target)) {
-						g_flBoost[target] = ability.GetFloat("velocity", 250.0);
-						g_iJumpMax[target] = ability.GetInt("max", 1);
-						IsTarget[target] = true;
-					}
-				}
-			}
-		}
-	}
-}
-
-public void FF2R_OnBossRemoved(int clientIdx) {
-	isActive = false;
-	for (int target = 1; target <= MaxClients; target++)
-		IsTarget[target] = false;
-}
-
-public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg) {
-	if (!StrContains(ability, "rage_doublejump", false) && cfg.IsMyPlugin()) {
-		isActive = true;
-		g_target = cfg.GetInt("target", 0);
-		float duration = cfg.GetFloat("duration", 0.0);
-
-		for (int target = 1; target <= MaxClients; target++) {
-			if(IsValidClient(target)) {
-				if(IsClientTarget(client, target, g_target)) {
-					IsTarget[target] = true;
-					g_flBoost[target] = cfg.GetFloat("velocity", 250.0);
-					g_iJumpMax[target] = cfg.GetInt("max", 1);
-					CreateTimer(duration, EndDoubleJump, target, TIMER_FLAG_NO_MAPCHANGE);
-				}
-			}
-		}
-	}
-}
-
-public Action EndDoubleJump(Handle timer, int client) {
-	IsTarget[client] = false;
-
-	return Plugin_Stop;
-}
-
-public void OnGameFrame() {
-	if (isActive) 							        // double jump active
-		for (int i = 1; i <= MaxClients; i++) 		// cycle through players
-			if (IsValidClient(i) && IsTarget[i] && IsPlayerAlive(i))
-				DoubleJump(i);						// Check for double jumping
-}
-
-stock void DoubleJump(const int client) {
-	int fCurFlags	= GetEntityFlags(client);		// current flags
-	int fCurButtons	= GetClientButtons(client);		// current buttons
-	
-	if (g_fLastFlags[client] & FL_ONGROUND) {		// was grounded last frame
-		if (
-			!(fCurFlags & FL_ONGROUND) &&			// becomes airbirne this frame
-			!(g_fLastButtons[client] & IN_JUMP) &&	// was not jumping last frame
-			fCurButtons & IN_JUMP					// started jumping this frame
-		) {
-			OriginalJump(client);					// process jump from the ground
-		}
-	} else if (										// was airborne last frame
-		fCurFlags & FL_ONGROUND						// becomes grounded this frame
-	) {
-		Landed(client);								// process landing on the ground
-	} else if (										// remains airborne this frame
-		!(g_fLastButtons[client] & IN_JUMP) &&		// was not jumping last frame
-		fCurButtons & IN_JUMP						// started jumping this frame
-	) {
-		ReJump(client);								// process attempt to double-jump
-	}
-	
-	g_fLastFlags[client]	= fCurFlags;				// update flag state for next frame
-	g_fLastButtons[client]	= fCurButtons;			// update button state for next frame
-}
-
-stock void OriginalJump(const int client) {
-	g_iJumps[client]++;	    // increment jump count
-}
-
-stock void Landed(const int client) {
-	g_iJumps[client] = 0;	// reset jumps count
-}
-
-stock void ReJump(const int client) {
-	if ( 1 <= g_iJumps[client] <= g_iJumpMax[client]) {						// has jumped at least once but hasn't exceeded max re-jumps
-		g_iJumps[client]++;											// increment jump count
-		float vVel[3];
-		GetEntPropVector(client, Prop_Data, "m_vecVelocity", vVel);	// get current speeds
-		
-		vVel[2] = g_flBoost[client];
-		TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, vVel);		// boost player
-	}
-}
-
-stock bool IsClientTarget(int client, int target, int type)
+public void OnPluginStart()
 {
-	switch(type)
-	{
-		case 1: // if target is boss,
-		{
-			if(client == target)		
-				return true;
-			else return false;
-		}
-		case 2: // if target's team same team as boss's team
-		{
-			if(GetClientTeam(target) == GetClientTeam(client)) 
-				return true;
-			else return false;
-		}
-		case 3: // if target's team is not same team as boss's team
-		{
-			if(GetClientTeam(target) != GetClientTeam(client)) 
-				return true;
-			else return false;
-		}
-		case 4: // if target is not boss
-		{
-			if(client != target) 
-				return true;
-			else return false;
-		}
-		default: // effect everyone
-		{
-			return true;	
-		}
-	}
+  for (int client = 1; client <= MaxClients; client++)
+  {
+    // Initialize all players
+    g_flBoost[client]      = 0.0;
+    g_fLastButtons[client] = 0;
+    g_fLastFlags[client]   = 0;
+    g_iJumps[client]       = 0;
+    g_iJumpMax[client]     = 0;
+    g_bIsTarget[client]    = false;
+    g_fDuration[client]    = INACTIVE;
+  }
 }
 
-stock bool IsValidClient(int client, bool replaycheck=true)
+public void OnPluginEnd()
 {
-	if(client <= 0 || client > MaxClients)
-		return false;
+  for (int client = 1; client <= MaxClients; client++)
+  {
+    // Reset all players
+    g_flBoost[client]      = 0.0;
+    g_fLastButtons[client] = 0;
+    g_fLastFlags[client]   = 0;
+    g_iJumps[client]       = 0;
+    g_iJumpMax[client]     = 0;
+    g_bIsTarget[client]    = false;
+    g_fDuration[client]    = INACTIVE;
+  }
+}
 
-	if(!IsClientInGame(client) || !IsClientConnected(client))
-		return false;
+public void FF2R_OnBossRemoved(int clientIdx)
+{
+  for (int i = 1; i <= MaxClients; i++)
+  {
+    g_flBoost[i]      = 0.0;
+    g_fLastButtons[i] = 0;
+    g_fLastFlags[i]   = 0;
+    g_iJumps[i]       = 0;
+    g_iJumpMax[i]     = 0;
+    g_bIsTarget[i]    = false;
+    g_fDuration[i]    = INACTIVE;
+  }
+}
 
-	if(GetEntProp(client, Prop_Send, "m_bIsCoaching"))
-		return false;
+public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
+{
+  if (!StrContains(ability, "rage_doublejump", false) && cfg.IsMyPlugin())
+  {
+    for (int i = 1; i <= MaxClients; i++)
+    {
+      if (IsValidClient(i))
+      {
+        g_flBoost[i]   = cfg.GetFloat("velocity", 250.0);
+        g_iJumpMax[i]  = cfg.GetInt("max", 1);
+        g_fDuration[i] = GetEngineTime() + cfg.GetFloat("duration", 10.0);
+        g_bIsTarget[i] = IsTarget(client, i, cfg.GetInt("target", 0));
+      }
+    }
+  }
+}
 
-	if(replaycheck && (IsClientSourceTV(client) || IsClientReplay(client)))
-		return false;
+public Action OnPlayerRunCmd(int client, int& buttons, int& impulse, float vel[3], float angles[3], int& weapon, int& subtype, int& cmdnum, int& tickcount, int& seed, int mouse[2])
+{
+  if (!IsValidClient(client) || !g_bIsTarget[client] || g_fDuration[client] == INACTIVE || g_fDuration[client] < GetEngineTime())
+  {
+    return Plugin_Continue;
+  }
 
-	return true;
-}	
+  int fCurFlags = GetEntityFlags(client);
+
+  if (g_fLastFlags[client] & FL_ONGROUND)
+  {
+    if (!(fCurFlags & FL_ONGROUND) && !(g_fLastButtons[client] & IN_JUMP) && (buttons & IN_JUMP))
+    {
+      OriginalJump(client);
+    }
+  }
+  else if (fCurFlags & FL_ONGROUND)
+  {
+    Landed(client);
+  }
+  else if (!(g_fLastButtons[client] & IN_JUMP) && (buttons & IN_JUMP))
+  {
+    ReJump(client);
+  }
+
+  g_fLastFlags[client]   = fCurFlags;
+  g_fLastButtons[client] = buttons;
+
+  return Plugin_Continue;
+}
+
+stock void OriginalJump(const int client)
+{
+  g_iJumps[client] = 1;  // Set to 1 instead of incrementing
+}
+
+stock void Landed(const int client)
+{
+  g_iJumps[client] = 0;
+}
+
+stock void ReJump(const int client)
+{
+  // Change condition to check if we haven't exceeded max jumps yet
+  if (g_iJumps[client] < g_iJumpMax[client])
+  {
+    float oldVel[3];
+    GetEntPropVector(client, Prop_Data, "m_vecVelocity", oldVel);
+
+    float vVel[3];
+    vVel[0] = oldVel[0];  // Preserve horizontal movement
+    vVel[1] = oldVel[1];
+    vVel[2] = g_flBoost[client];
+
+    TeleportEntity(client, NULL_VECTOR, NULL_VECTOR, vVel);
+    g_iJumps[client]++;
+  }
+}
+
+stock bool IsTarget(int client, int target, int type)
+{
+  switch (type)
+  {
+    case 1:  // if target is boss,
+    {
+      if (client == target) return true;
+      else return false;
+    }
+    case 2:  // if target's team same team as boss's team
+    {
+      if (GetClientTeam(target) == GetClientTeam(client)) return true;
+      else return false;
+    }
+    case 3:  // if target's team is not same team as boss's team
+    {
+      if (GetClientTeam(target) != GetClientTeam(client)) return true;
+      else return false;
+    }
+    case 4:  // if target is not boss
+    {
+      if (client != target) return true;
+      else return false;
+    }
+    default:  // effect everyone
+    {
+      return true;
+    }
+  }
+}
+
+stock bool IsValidClient(int client, bool replaycheck = true)
+{
+  if (client <= 0 || client > MaxClients)
+    return false;
+  if (!IsClientInGame(client) || !IsClientConnected(client))
+    return false;
+  if (GetEntProp(client, Prop_Send, "m_bIsCoaching"))
+    return false;
+  if (replaycheck && (IsClientSourceTV(client) || IsClientReplay(client)))
+    return false;
+  return true;
+}
