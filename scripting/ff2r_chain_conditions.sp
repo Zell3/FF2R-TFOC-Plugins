@@ -64,21 +64,16 @@ public void OnPluginStart()
 {
   for (int i = 1; i <= MaxClients; i++)
   {
-    if (IsClientInGame(i))
-    {
-      g_ConditionSets[i] = new ArrayList(sizeof(ConditionSet));
-    }
+    g_ConditionSets[i] = new ArrayList(sizeof(ConditionSet));
   }
 }
 
-public void OnClientConnected(int client)
+public void OnPluginEnd()
 {
-  g_ConditionSets[client] = new ArrayList(sizeof(ConditionSet));
-}
-
-public void OnClientDisconnect(int client)
-{
-  delete g_ConditionSets[client];
+  for (int i = 1; i <= MaxClients; i++)
+  {
+    delete g_ConditionSets[i];
+  }
 }
 
 public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
