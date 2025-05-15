@@ -1,17 +1,16 @@
 #include <sourcemod>
 #include <cfgmap>
 #include <ff2r>
-#include <clientprefs>
 #include <sdktools>
 #include <sdkhooks>
 #include <tf2items>
 #include <tf2_stocks>
+#include <clientprefs>
 #include <freak_fortress_2>
 #include <freak_fortress_2_subplugin>
 #include <morecolors>
 
 #pragma semicolon 1
-#pragma newdecls required
 
 // All the general informations here
 #define FAR_FUTURE                  100000000.0
@@ -883,6 +882,11 @@ public void OnRoundEnd(Event event, const char[] name, bool dontBroadcast)
       CreateTimer(5.0, RoundResultSound, _, TIMER_FLAG_NO_MAPCHANGE);  // sarysa: kept this one around, but fixed param #4 to be the no mapchange flag
     }
   }
+}
+// use FF2R Instead
+public Action FF2_OnAbility2(bossIdx, const String:plugin_name[], const String:ability_name[], status)
+{
+  return Plugin_Continue;
 }
 
 public void FF2R_OnAbility(int client, const char[] ability_name, AbilityData cfg)
