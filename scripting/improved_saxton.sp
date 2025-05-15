@@ -1,7 +1,3 @@
-// no warranty blah blah don't sue blah blah doing this for fun blah blah...
-
-//#define VSP_VERSION
-
 #pragma semicolon 1
 
 #include <sourcemod>
@@ -87,10 +83,10 @@ enum // Collision_Group_t in const.h
 
 	LAST_SHARED_COLLISION_GROUP
 };
- 
+
 new bool:DEBUG_FORCE_RAGE = false;
 #define ARG_LENGTH 256
- 
+
 new bool:PRINT_DEBUG_INFO = false;
 new bool:PRINT_DEBUG_SPAM = false;
 
@@ -122,14 +118,6 @@ new Float:OFF_THE_MAP[3] = { 16383.0, 16383.0, -16383.0 };
 // common array limits
 #define MAX_CONDITIONS 10 // TF2 conditions (bleed, dazed, etc.)
 
-#define MAX_PLAYERS_ARRAY 36
-#define MAX_PLAYERS (MAX_PLAYERS_ARRAY < (MaxClients + 1) ? MAX_PLAYERS_ARRAY : (MaxClients + 1))
-
-new bool:NULL_BLACKLIST[MAX_PLAYERS_ARRAY];
-
-new MercTeam = _:TFTeam_Red;
-new BossTeam = _:TFTeam_Blue;
-
 new bool:RoundInProgress = false;
 new bool:PluginActiveThisRound = false;
 
@@ -158,28 +146,28 @@ public Plugin:myinfo = {
 #define SL_SOLIDIFY_INTERVAL 0.05
 new bool:SL_ActiveThisRound;
 new bool:SL_EnsureCollision = false; // an extra layer of protection for the collision fudging that lunge does
-new bool:SL_CanUse[MAX_PLAYERS_ARRAY];
-new bool:SL_IsUsing[MAX_PLAYERS_ARRAY]; // internal
-new bool:SL_KeyDown[MAX_PLAYERS_ARRAY]; // internal
-new Float:SL_InitialYaw[MAX_PLAYERS_ARRAY]; // internal
-new Float:SL_InitialPitch[MAX_PLAYERS_ARRAY]; // internal, needed only for speed verification and proper push renewal
-new Float:SL_OnCooldownUntil[MAX_PLAYERS_ARRAY]; // internal
-new Float:SL_NextPushAt[MAX_PLAYERS_ARRAY]; // internal
-new Float:SL_GraceEndsAt[MAX_PLAYERS_ARRAY]; // internal
-new Float:SL_ForceRageEndAt[MAX_PLAYERS_ARRAY]; // internal
-new bool:SL_AlreadyHit[MAX_PLAYERS_ARRAY]; // internal, victim use
+new bool:SL_CanUse[MAXPLAYERS + 1];
+new bool:SL_IsUsing[MAXPLAYERS + 1]; // internal
+new bool:SL_KeyDown[MAXPLAYERS + 1]; // internal
+new Float:SL_InitialYaw[MAXPLAYERS + 1]; // internal
+new Float:SL_InitialPitch[MAXPLAYERS + 1]; // internal, needed only for speed verification and proper push renewal
+new Float:SL_OnCooldownUntil[MAXPLAYERS + 1]; // internal
+new Float:SL_NextPushAt[MAXPLAYERS + 1]; // internal
+new Float:SL_GraceEndsAt[MAXPLAYERS + 1]; // internal
+new Float:SL_ForceRageEndAt[MAXPLAYERS + 1]; // internal
+new bool:SL_AlreadyHit[MAXPLAYERS + 1]; // internal, victim use
 new Float:SL_TrySolidifyAt; // internal
 new SL_TrySolidifyBossClientIdx; // internal
-new SL_DesiredKey[MAX_PLAYERS_ARRAY]; // based on arg1
-new Float:SL_Cooldown[MAX_PLAYERS_ARRAY]; // arg2
-new Float:SL_RageCost[MAX_PLAYERS_ARRAY]; // arg3
-new Float:SL_Velocity[MAX_PLAYERS_ARRAY]; // arg4
-new Float:SL_Damage[MAX_PLAYERS_ARRAY]; // arg5
-new bool:SL_DestroyBuildings[MAX_PLAYERS_ARRAY]; // arg6
-new Float:SL_BaseKnockback[MAX_PLAYERS_ARRAY]; // arg7
-new Float:SL_CollisionDistance[MAX_PLAYERS_ARRAY]; // arg8
-new Float:SL_CollisionHeight[MAX_PLAYERS_ARRAY]; // arg9
-new Float:SL_CollisionRadius[MAX_PLAYERS_ARRAY]; // arg10
+new SL_DesiredKey[MAXPLAYERS + 1]; // based on arg1
+new Float:SL_Cooldown[MAXPLAYERS + 1]; // arg2
+new Float:SL_RageCost[MAXPLAYERS + 1]; // arg3
+new Float:SL_Velocity[MAXPLAYERS + 1]; // arg4
+new Float:SL_Damage[MAXPLAYERS + 1]; // arg5
+new bool:SL_DestroyBuildings[MAXPLAYERS + 1]; // arg6
+new Float:SL_BaseKnockback[MAXPLAYERS + 1]; // arg7
+new Float:SL_CollisionDistance[MAXPLAYERS + 1]; // arg8
+new Float:SL_CollisionHeight[MAXPLAYERS + 1]; // arg9
+new Float:SL_CollisionRadius[MAXPLAYERS + 1]; // arg10
 // arg11 only used at rage time
 new String:SL_HitSound[MAX_SOUND_FILE_LENGTH]; // arg12, shared
 new String:SL_HitEffect[MAX_EFFECT_NAME_LENGTH]; // arg13
@@ -198,34 +186,34 @@ new String:SL_WeighdownError[MAX_CENTER_TEXT_LENGTH]; // arg19
 #define SS_EFFECT_GROUNDPOUND1 "hammer_impact_button_dust2"
 #define SS_EFFECT_GROUNDPOUND2 "hammer_impact_button_ring"
 new bool:SS_ActiveThisRound;
-new bool:SS_CanUse[MAX_PLAYERS_ARRAY];
-new bool:SS_IsUsing[MAX_PLAYERS_ARRAY]; // internal
-new bool:SS_KeyDown[MAX_PLAYERS_ARRAY]; // internal
-new Float:SS_PreparingUntil[MAX_PLAYERS_ARRAY]; // internal
-new Float:SS_TauntingUntil[MAX_PLAYERS_ARRAY]; // internal
-new Float:SS_OnCooldownUntil[MAX_PLAYERS_ARRAY]; // internal
-new Float:SS_NoSlamUntil[MAX_PLAYERS_ARRAY]; // internal, workaround for a bug where slam sometimes happens in midair
-new bool:SS_WasFirstPerson[MAX_PLAYERS_ARRAY]; // internal
-new SS_DesiredKey[MAX_PLAYERS_ARRAY]; // based on arg1
-new Float:SS_Cooldown[MAX_PLAYERS_ARRAY]; // arg2
-new Float:SS_RageCost[MAX_PLAYERS_ARRAY]; // arg3
-new SS_ForcedTaunt[MAX_PLAYERS_ARRAY]; // arg4
-new Float:SS_PropDelay[MAX_PLAYERS_ARRAY]; // arg5
+new bool:SS_CanUse[MAXPLAYERS + 1];
+new bool:SS_IsUsing[MAXPLAYERS + 1]; // internal
+new bool:SS_KeyDown[MAXPLAYERS + 1]; // internal
+new Float:SS_PreparingUntil[MAXPLAYERS + 1]; // internal
+new Float:SS_TauntingUntil[MAXPLAYERS + 1]; // internal
+new Float:SS_OnCooldownUntil[MAXPLAYERS + 1]; // internal
+new Float:SS_NoSlamUntil[MAXPLAYERS + 1]; // internal, workaround for a bug where slam sometimes happens in midair
+new bool:SS_WasFirstPerson[MAXPLAYERS + 1]; // internal
+new SS_DesiredKey[MAXPLAYERS + 1]; // based on arg1
+new Float:SS_Cooldown[MAXPLAYERS + 1]; // arg2
+new Float:SS_RageCost[MAXPLAYERS + 1]; // arg3
+// new SS_ForcedTaunt[MAXPLAYERS + 1]; // arg4
+new Float:SS_PropDelay[MAXPLAYERS + 1]; // arg5
 new String:SS_PropModel[MAX_MODEL_FILE_LENGTH]; // arg6
-new Float:SS_GravityDelay[MAX_PLAYERS_ARRAY]; // arg7
-new Float:SS_GravitySetting[MAX_PLAYERS_ARRAY]; // arg8
-new Float:SS_MaxDamage[MAX_PLAYERS_ARRAY]; // arg9
-new Float:SS_Radius[MAX_PLAYERS_ARRAY]; // arg10
-new Float:SS_DamageDecayExponent[MAX_PLAYERS_ARRAY]; // arg11
-new Float:SS_BuildingDamageFactor[MAX_PLAYERS_ARRAY]; // arg12
-new Float:SS_Knockback[MAX_PLAYERS_ARRAY]; // arg13
-new Float:SS_PitchConstraint[MAX_PLAYERS_ARRAY][2]; // arg14
+new Float:SS_GravityDelay[MAXPLAYERS + 1]; // arg7
+new Float:SS_GravitySetting[MAXPLAYERS + 1]; // arg8
+new Float:SS_MaxDamage[MAXPLAYERS + 1]; // arg9
+new Float:SS_Radius[MAXPLAYERS + 1]; // arg10
+new Float:SS_DamageDecayExponent[MAXPLAYERS + 1]; // arg11
+new Float:SS_BuildingDamageFactor[MAXPLAYERS + 1]; // arg12
+new Float:SS_Knockback[MAXPLAYERS + 1]; // arg13
+new Float:SS_PitchConstraint[MAXPLAYERS + 1][2]; // arg14
 // arg14 and arg15 only used at rage time
 new String:SS_CooldownError[MAX_CENTER_TEXT_LENGTH]; // arg16
 new String:SS_NotEnoughRageError[MAX_CENTER_TEXT_LENGTH]; // arg17
 new String:SS_NotMidairError[MAX_CENTER_TEXT_LENGTH]; // arg18
 new String:SS_WeighdownError[MAX_CENTER_TEXT_LENGTH]; // arg19
-new SS_SaxtonEntRef[MAX_PLAYERS_ARRAY] = {INVALID_ENTREF, ...};
+new SS_SaxtonEntRef[MAXPLAYERS + 1] = {INVALID_ENTREF, ...};
 
 /**
  * Saxton Berserker
@@ -237,22 +225,22 @@ new SS_SaxtonEntRef[MAX_PLAYERS_ARRAY] = {INVALID_ENTREF, ...};
 #define SB_FLAG_IGNITE_SOLDIER 0x0008
 #define SB_FLAG_WEAK_KNOCKBACK_IMMUNE 0x0010
 new bool:SB_ActiveThisRound;
-new bool:SB_CanUse[MAX_PLAYERS_ARRAY];
-new Float:SB_UsingUntil[MAX_PLAYERS_ARRAY];
-new Float:SB_FireExpiresAt[MAX_PLAYERS_ARRAY]; // internal, victim use only
-new bool:SB_GiveRageRefund[MAX_PLAYERS_ARRAY]; // internal, for extreme edge case
-new SB_FlameEntRefs[MAX_PLAYERS_ARRAY][2]; // internal
-new bool:SB_IsFists[MAX_PLAYERS_ARRAY]; // internal
-new Float:SB_LastAttackAvailable[MAX_PLAYERS_ARRAY]; // internal
-new bool:SB_IsAttack2[MAX_PLAYERS_ARRAY]; // internal
-new TFClassType:SB_OriginalClass[MAX_PLAYERS_ARRAY]; // internal
-new Float:SB_Duration[MAX_PLAYERS_ARRAY]; // arg1
+new bool:SB_CanUse[MAXPLAYERS + 1];
+new Float:SB_UsingUntil[MAXPLAYERS + 1];
+new Float:SB_FireExpiresAt[MAXPLAYERS + 1]; // internal, victim use only
+new bool:SB_GiveRageRefund[MAXPLAYERS + 1]; // internal, for extreme edge case
+new SB_FlameEntRefs[MAXPLAYERS + 1][2]; // internal
+new bool:SB_IsFists[MAXPLAYERS + 1]; // internal
+new Float:SB_LastAttackAvailable[MAXPLAYERS + 1]; // internal
+new bool:SB_IsAttack2[MAXPLAYERS + 1]; // internal
+new TFClassType:SB_OriginalClass[MAXPLAYERS + 1]; // internal
+new Float:SB_Duration[MAXPLAYERS + 1]; // arg1
 // arg2-arg10 not stored
-new Float:SB_Speed[MAX_PLAYERS_ARRAY]; // arg11
+new Float:SB_Speed[MAXPLAYERS + 1]; // arg11
 // arg12 not stored
-new TFClassType:SB_TempClass[MAX_PLAYERS_ARRAY]; // arg13
-new Float:SB_FireTimeLimit[MAX_PLAYERS_ARRAY]; // arg14
-new SB_Flags[MAX_PLAYERS_ARRAY]; // arg19
+new TFClassType:SB_TempClass[MAXPLAYERS + 1]; // arg13
+new Float:SB_FireTimeLimit[MAXPLAYERS + 1]; // arg14
+new SB_Flags[MAXPLAYERS + 1]; // arg19
 
 /**
  * Saxton HUDs
@@ -260,37 +248,37 @@ new SB_Flags[MAX_PLAYERS_ARRAY]; // arg19
 #define SH_STRING "saxton_huds" // a unified HUD, to prevent flicker
 #define SH_MAX_HUD_FORMAT_LENGTH 30 // keep it short since it may be individualized in a multi-boss scenario and I don't want to waste too much data space
 new bool:SH_ActiveThisRound;
-new bool:SH_CanUse[MAX_PLAYERS_ARRAY];
-new Float:SH_NextHUDAt[MAX_PLAYERS_ARRAY]; // internal
-new Float:SH_HUDInterval[MAX_PLAYERS_ARRAY]; // internal, minor interface change if using Dynamic Defaults to minimize flicker
-new SH_LastHPValue[MAX_PLAYERS_ARRAY]; // internal, for bullshit workaround
+new bool:SH_CanUse[MAXPLAYERS + 1];
+new Float:SH_NextHUDAt[MAXPLAYERS + 1]; // internal
+new Float:SH_HUDInterval[MAXPLAYERS + 1]; // internal, minor interface change if using Dynamic Defaults to minimize flicker
+new SH_LastHPValue[MAXPLAYERS + 1]; // internal, for bullshit workaround
 new Handle:SH_NormalHUDHandle;
 new Handle:SH_AlertHUDHandle;
-new Float:SH_HudY[MAX_PLAYERS_ARRAY]; // arg1
-new String:SH_HudFormat[MAX_PLAYERS_ARRAY][SH_MAX_HUD_FORMAT_LENGTH]; // arg2
-new bool:SH_DisplayHealth[MAX_PLAYERS_ARRAY]; // arg3
-new bool:SH_DisplayRage[MAX_PLAYERS_ARRAY]; // arg4
+new Float:SH_HudY[MAXPLAYERS + 1]; // arg1
+new String:SH_HudFormat[MAXPLAYERS + 1][SH_MAX_HUD_FORMAT_LENGTH]; // arg2
+new bool:SH_DisplayHealth[MAXPLAYERS + 1]; // arg3
+new bool:SH_DisplayRage[MAXPLAYERS + 1]; // arg4
 new String:SH_LungeReadyStr[MAX_CENTER_TEXT_LENGTH]; // arg5, shared
 new String:SH_LungeNotReadyStr[MAX_CENTER_TEXT_LENGTH]; // arg6, shared
 new String:SH_SlamReadyStr[MAX_CENTER_TEXT_LENGTH]; // arg7, shared
 new String:SH_SlamNotReadyStr[MAX_CENTER_TEXT_LENGTH]; // arg8, shared
 new String:SH_BerserkReadyStr[MAX_CENTER_TEXT_LENGTH]; // arg9, shared
 new String:SH_BerserkNotReadyStr[MAX_CENTER_TEXT_LENGTH]; // arg10, shared
-new SH_NormalColor[MAX_PLAYERS_ARRAY]; // arg11
-new SH_AlertColor[MAX_PLAYERS_ARRAY]; // arg12
-new bool:SH_AlertIfNotReady[MAX_PLAYERS_ARRAY]; // arg13
+new SH_NormalColor[MAXPLAYERS + 1]; // arg11
+new SH_AlertColor[MAXPLAYERS + 1]; // arg12
+new bool:SH_AlertIfNotReady[MAXPLAYERS + 1]; // arg13
 new String:SH_HealthStr[MAX_CENTER_TEXT_LENGTH]; // arg14, shared
 new String:SH_RageStr[MAX_CENTER_TEXT_LENGTH]; // arg15, shared
-new bool:SH_AlertOnLowHP[MAX_PLAYERS_ARRAY]; // arg16
+new bool:SH_AlertOnLowHP[MAXPLAYERS + 1]; // arg16
 
 /**
  * Saxton Advanced Options
  */
 #define SAO_STRING "saxton_advanced_options"
-new bool:SAO_CanUse[MAX_PLAYERS_ARRAY];
-new TFCond:SAO_LungeConditions[MAX_PLAYERS_ARRAY][MAX_CONDITIONS]; // arg1
-new TFCond:SAO_SlamConditions[MAX_PLAYERS_ARRAY][MAX_CONDITIONS]; // arg2
-new TFCond:SAO_BerserkConditions[MAX_PLAYERS_ARRAY][MAX_CONDITIONS]; // arg3
+new bool:SAO_CanUse[MAXPLAYERS + 1];
+new TFCond:SAO_LungeConditions[MAXPLAYERS + 1][MAX_CONDITIONS]; // arg1
+new TFCond:SAO_SlamConditions[MAXPLAYERS + 1][MAX_CONDITIONS]; // arg2
+new TFCond:SAO_BerserkConditions[MAXPLAYERS + 1][MAX_CONDITIONS]; // arg3
 // args 12-19 aren't initialized
 
 /**
@@ -333,7 +321,6 @@ public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroad
 	Saxton_Cleanup();
 	
 	// since this can now be dynamically switched.
-	BossTeam = FF2_GetBossTeam();
 	RoundInProgress = true;
 	
 	// initialize variables
@@ -344,7 +331,7 @@ public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroad
 	SH_ActiveThisRound = false;
 	
 	// initialize arrays
-	for (new clientIdx = 1; clientIdx < MAX_PLAYERS; clientIdx++)
+	for (new clientIdx = 1; clientIdx < MaxClients; clientIdx++)
 	{
 		// all client inits
 		SL_CanUse[clientIdx] = false;
@@ -510,7 +497,7 @@ public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroad
 	{
 		PrecacheSound(NOPE_AVI); // one more go at this, for paranoia sake
 	
-		for (new clientIdx = 1; clientIdx < MAX_PLAYERS; clientIdx++)
+		for (new clientIdx = 1; clientIdx < MaxClients; clientIdx++)
 		{
 			if (SS_CanUse[clientIdx] || SB_CanUse[clientIdx] || SL_CanUse[clientIdx])
 				SDKHook(clientIdx, SDKHook_PreThink, Saxton_PreThink);
@@ -530,9 +517,9 @@ public Action:Timer_PostRoundStartInits(Handle:timer)
 		return Plugin_Handled;
 	
 	// finish initialization of stuff
-	for (new clientIdx = 1; clientIdx < MAX_PLAYERS; clientIdx++)
+	for (new clientIdx = 1; clientIdx < MaxClients; clientIdx++)
 	{
-		if (!IsLivingPlayer(clientIdx) || GetClientTeam(clientIdx) != BossTeam)
+		if (!IsLivingPlayer(clientIdx))
 			continue;
 
 		new bossIdx = FF2_GetBossIndex(clientIdx);
@@ -578,7 +565,7 @@ public Saxton_Cleanup()
 		SL_ActiveThisRound = false;
 		SH_ActiveThisRound = false;
 	
-		for (new clientIdx = 1; clientIdx < MAX_PLAYERS; clientIdx++)
+		for (new clientIdx = 1; clientIdx < MaxClients; clientIdx++)
 		{
 			if (IsClientInGame(clientIdx))
 			{
@@ -870,7 +857,7 @@ public bool:SL_RageAvailable(clientIdx, Float:curTime, bool:reportError)
 		{
 			if (!IsEmptyString(SL_NotEnoughRageError))
 				PrintCenterText(clientIdx, SL_NotEnoughRageError, SL_RageCost[clientIdx]);
-			Nope(clientIdx);
+			EmitSoundToClient(clientIdx, NOPE_AVI);
 		}
 		return false;
 	}
@@ -881,7 +868,7 @@ public bool:SL_RageAvailable(clientIdx, Float:curTime, bool:reportError)
 		{
 			if (!IsEmptyString(SL_WeighdownError))
 				PrintCenterText(clientIdx, SL_WeighdownError);
-			Nope(clientIdx);
+			EmitSoundToClient(clientIdx, NOPE_AVI);
 		}
 		return false;
 	}
@@ -892,7 +879,7 @@ public bool:SL_RageAvailable(clientIdx, Float:curTime, bool:reportError)
 		{
 			if (!IsEmptyString(SL_InWaterError))
 				PrintCenterText(clientIdx, SL_InWaterError);
-			Nope(clientIdx);
+			EmitSoundToClient(clientIdx, NOPE_AVI);
 		}
 		return false;
 	}
@@ -903,7 +890,7 @@ public bool:SL_RageAvailable(clientIdx, Float:curTime, bool:reportError)
 		{
 			if (!IsEmptyString(SL_CooldownError))
 				PrintCenterText(clientIdx, SL_CooldownError);
-			Nope(clientIdx);
+			EmitSoundToClient(clientIdx, NOPE_AVI);
 		}
 		return false;
 	}
@@ -936,7 +923,7 @@ public SL_Initiate(clientIdx, Float:curTime)
 	SL_GraceEndsAt[clientIdx] = curTime + 0.1; // grace for still being on the ground, without this the rage ends immediately
 	SL_ForceRageEndAt[clientIdx] = curTime + 1.0; // my code would allow people to surf endlessly on some maps. need to have to have a raw time limit.
 	SL_IsUsing[clientIdx] = true;
-	for (new victim = 1; victim < MAX_PLAYERS; victim++)
+	for (new victim = 1; victim < MaxClients; victim++)
 	{
 		// set a neutral collision group to allow the hell to mow through enemies
 		if (IsLivingPlayer(victim))
@@ -1061,9 +1048,9 @@ public SL_PreThink(clientIdx)
 		//PrintToServer("hitPos vs bossPos: %f,%f,%f vs %f,%f,%f     colrad=%f", hitPos[0], hitPos[1], hitPos[2], bossPos[0], bossPos[1], bossPos[2], SL_CollisionRadius[clientIdx]);
 
 		// check collision every tick
-		for (new victim = 1; victim < MAX_PLAYERS; victim++)
+		for (new victim = 1; victim < MaxClients; victim++)
 		{
-			if (SL_AlreadyHit[victim] || !IsLivingPlayer(victim) || GetClientTeam(victim) == BossTeam)
+			if (SL_AlreadyHit[victim] || !IsLivingPlayer(victim) || GetClientTeam(victim) == GetClientTeam(clientIdx))
 				continue;
 
 			// cylinder collision check
@@ -1094,7 +1081,7 @@ public SL_PreThink(clientIdx)
 
 				// damage is simple enough
 				if (SL_Damage[clientIdx] > 0.0)
-					FullyHookedDamage(victim, clientIdx, clientIdx, fixDamageForFF2(SL_Damage[clientIdx] * 0.33), DMG_CRIT, -1);
+					FullyHookedDamage(victim, clientIdx, fixDamageForFF2(SL_Damage[clientIdx] * 0.33), DMG_CRIT);
 			}
 		}
 
@@ -1193,7 +1180,7 @@ public bool:SS_RageAvailable(clientIdx, Float:curTime, bool:reportError)
 		{
 			if (!IsEmptyString(SS_NotEnoughRageError))
 				PrintCenterText(clientIdx, SS_NotEnoughRageError, SS_RageCost[clientIdx]);
-			Nope(clientIdx);
+			EmitSoundToClient(clientIdx, NOPE_AVI);
 		}
 		return false;
 	}
@@ -1204,7 +1191,7 @@ public bool:SS_RageAvailable(clientIdx, Float:curTime, bool:reportError)
 		{
 			if (!IsEmptyString(SS_WeighdownError))
 				PrintCenterText(clientIdx, SS_WeighdownError);
-			Nope(clientIdx);
+			EmitSoundToClient(clientIdx, NOPE_AVI);
 		}
 		return false;
 	}
@@ -1215,7 +1202,7 @@ public bool:SS_RageAvailable(clientIdx, Float:curTime, bool:reportError)
 		{
 			if (!IsEmptyString(SS_NotMidairError))
 				PrintCenterText(clientIdx, SS_NotMidairError);
-			Nope(clientIdx);
+			EmitSoundToClient(clientIdx, NOPE_AVI);
 		}
 		return false;
 	}
@@ -1226,7 +1213,7 @@ public bool:SS_RageAvailable(clientIdx, Float:curTime, bool:reportError)
 		{
 			if (!IsEmptyString(SS_CooldownError))
 				PrintCenterText(clientIdx, SS_CooldownError);
-			Nope(clientIdx);
+			EmitSoundToClient(clientIdx, NOPE_AVI);
 		}
 		return false;
 	}
@@ -1421,9 +1408,9 @@ public SS_PreThink(clientIdx)
 				if (!IsEmptyString(effect2))
 					ParticleEffectAt(halePos, effect2, 1.0);
 				
-				for (new victim = 1; victim < MAX_PLAYERS; victim++)
+				for (new victim = 1; victim < MaxClients; victim++)
 				{
-					if (!IsLivingPlayer(victim) || GetClientTeam(victim) == BossTeam)
+					if (!IsLivingPlayer(victim) || GetClientTeam(victim) == GetClientTeam(clientIdx))
 						continue;
 					else if (IsTreadingWater(victim) || IsFullyInWater(victim) || CheckGroundClearance(victim, 80.0, true))
 						continue;
@@ -1451,7 +1438,7 @@ public SS_PreThink(clientIdx)
 						if (TF2_GetPlayerClass(victim) == TFClass_Spy || float(GetEntProp(victim, Prop_Send, "m_iHealth")) * 0.66 >= damage)
 							SDKHooks_TakeDamage(victim, clientIdx, clientIdx, damage, DMG_PREVENT_PHYSICS_FORCE, -1);
 						else
-							FullyHookedDamage(victim, clientIdx, clientIdx, fixDamageForFF2(damage), DMG_PREVENT_PHYSICS_FORCE, -1);
+							FullyHookedDamage(victim, clientIdx, fixDamageForFF2(damage), DMG_PREVENT_PHYSICS_FORCE);
 					}
 				}
 				
@@ -1649,7 +1636,7 @@ public Rage_SaxtonBerserk(clientIdx)
 	if ((SL_CanUse[clientIdx] && SL_IsUsing[clientIdx]) || (SS_CanUse[clientIdx] && SS_IsUsing[clientIdx]))
 	{
 		SB_GiveRageRefund[clientIdx] = true;
-		Nope(clientIdx);
+		EmitSoundToClient(clientIdx, NOPE_AVI);
 		return;
 	}
 
@@ -1769,9 +1756,9 @@ public OnGameFrame()
 			maxs[2] = bossPos[2] + 85.0;
 		
 			new bool:fail = false;
-			for (new victim = 1; victim < MAX_PLAYERS; victim++)
+			for (new victim = 1; victim < MaxClients; victim++)
 			{
-				if (!IsLivingPlayer(victim) || GetClientTeam(victim) == BossTeam)
+				if (!IsLivingPlayer(victim) || GetClientTeam(victim) == GetClientTeam(SL_TrySolidifyBossClientIdx))
 					continue;
 					
 				static Float:victimPos[3];
@@ -1790,7 +1777,7 @@ public OnGameFrame()
 			else
 			{
 				SL_TrySolidifyAt = FAR_FUTURE;
-				for (new victim = 1; victim < MAX_PLAYERS; victim++)
+				for (new victim = 1; victim < MaxClients; victim++)
 					if (IsLivingPlayer(victim))
 						SetEntProp(victim, Prop_Send, "m_CollisionGroup", COLLISION_GROUP_PLAYER);
 			}
@@ -1800,7 +1787,7 @@ public OnGameFrame()
 	// also need the game frame for removing excess fire
 	if (SB_ActiveThisRound)
 	{
-		for (new victim = 1; victim < MAX_PLAYERS; victim++)
+		for (new victim = 1; victim < MaxClients; victim++)
 		{
 			if (IsLivingPlayer(victim) && curTime >= SB_FireExpiresAt[victim])
 			{
@@ -1811,7 +1798,7 @@ public OnGameFrame()
 		}
 	}
 }
- 
+
 public Action:OnPlayerRunCmd(clientIdx, &buttons, &impulse, Float:vel[3], Float:unusedangles[3], &weapon)
 {
 	if (!PluginActiveThisRound || !RoundInProgress)
@@ -1947,20 +1934,17 @@ public Action:Timer_RemoveEntityNoTele(Handle:timer, any:entid)
 		AcceptEntityInput(entity, "Kill");
 }
 
+public bool:TraceWallsOnly(entity, contentsMask)
+{
+	return false;
+}
+
 stock bool:IsLivingPlayer(clientIdx)
 {
-	if (clientIdx <= 0 || clientIdx >= MAX_PLAYERS)
+	if (clientIdx <= 0 || clientIdx >= MaxClients)
 		return false;
 		
 	return IsClientInGame(clientIdx) && IsPlayerAlive(clientIdx);
-}
-
-stock bool:IsValidBoss(clientIdx)
-{
-	if (!IsLivingPlayer(clientIdx))
-		return false;
-		
-	return GetClientTeam(clientIdx) == BossTeam;
 }
 
 stock SwitchWeapon(bossClient, String:weaponName[], weaponIdx, String:weaponAttributes[], visible)
@@ -2026,182 +2010,12 @@ stock SpawnWeapon(client, String:name[], index, level, quality, String:attribute
 	return entity;
 }
 
-stock bool:IsPlayerInRange(player, Float:position[3], Float:maxDistance)
-{
-	maxDistance *= maxDistance;
-	
-	static Float:playerPos[3];
-	GetEntPropVector(player, Prop_Data, "m_vecOrigin", playerPos);
-	return GetVectorDistance(position, playerPos, true) <= maxDistance;
-}
-
-stock FindRandomPlayer(bool:isBossTeam, Float:position[3] = NULL_VECTOR, Float:maxDistance = 0.0, bool:anyTeam = false, bool:deadOnly = false)
-{
-	return FindRandomPlayerBlacklist(isBossTeam, NULL_BLACKLIST, position, maxDistance, anyTeam, deadOnly);
-}
-
-stock FindRandomPlayerBlacklist(bool:isBossTeam, const bool:blacklist[MAX_PLAYERS_ARRAY], Float:position[3] = NULL_VECTOR, Float:maxDistance = 0.0, bool:anyTeam = false, bool:deadOnly = false)
-{
-	new player = -1;
-
-	// first, get a player count for the team we care about
-	new playerCount = 0;
-	for (new clientIdx = 1; clientIdx < MAX_PLAYERS; clientIdx++)
-	{
-		if (!deadOnly && !IsLivingPlayer(clientIdx))
-			continue;
-		else if (deadOnly)
-		{
-			if (!IsClientInGame(clientIdx) || IsLivingPlayer(clientIdx))
-				continue;
-		}
-			
-		if (!deadOnly && maxDistance > 0.0 && !IsPlayerInRange(clientIdx, position, maxDistance))
-			continue;
-			
-		if (blacklist[clientIdx])
-			continue;
-
-		// fixed to not grab people in spectator, since we can now include the dead
-		new bool:valid = anyTeam && (GetClientTeam(clientIdx) == BossTeam || GetClientTeam(clientIdx) == MercTeam);
-		if (!valid)
-			valid = (isBossTeam && GetClientTeam(clientIdx) == BossTeam) || (!isBossTeam && GetClientTeam(clientIdx) == MercTeam);
-			
-		if (valid)
-			playerCount++;
-	}
-
-	// ensure there's at least one living valid player
-	if (playerCount <= 0)
-		return -1;
-
-	// now randomly choose our victim
-	new rand = GetRandomInt(0, playerCount - 1);
-	playerCount = 0;
-	for (new clientIdx = 1; clientIdx < MAX_PLAYERS; clientIdx++)
-	{
-		if (!deadOnly && !IsLivingPlayer(clientIdx))
-			continue;
-		else if (deadOnly)
-		{
-			if (!IsClientInGame(clientIdx) || IsLivingPlayer(clientIdx))
-				continue;
-		}
-			
-		if (!deadOnly && maxDistance > 0.0 && !IsPlayerInRange(clientIdx, position, maxDistance))
-			continue;
-
-		if (blacklist[clientIdx])
-			continue;
-
-		// fixed to not grab people in spectator, since we can now include the dead
-		new bool:valid = anyTeam && (GetClientTeam(clientIdx) == BossTeam || GetClientTeam(clientIdx) == MercTeam);
-		if (!valid)
-			valid = (isBossTeam && GetClientTeam(clientIdx) == BossTeam) || (!isBossTeam && GetClientTeam(clientIdx) == MercTeam);
-			
-		if (valid)
-		{
-			if (playerCount == rand) // needed if rand is 0
-			{
-				player = clientIdx;
-				break;
-			}
-			playerCount++;
-			if (playerCount == rand) // needed if rand is playerCount - 1, executes for all others except 0
-			{
-				player = clientIdx;
-				break;
-			}
-		}
-	}
-	
-	return player;
-}
-
-stock bool:CheckLineOfSight(Float:position[3], targetEntity, Float:zOffset)
-{
-	static Float:targetPos[3];
-	GetEntPropVector(targetEntity, Prop_Send, "m_vecOrigin", targetPos);
-	targetPos[2] += zOffset;
-	static Float:angles[3];
-	GetVectorAnglesTwoPoints(position, targetPos, angles);
-	
-	new Handle:trace = TR_TraceRayFilterEx(position, angles, (CONTENTS_SOLID|CONTENTS_WINDOW|CONTENTS_GRATE), RayType_Infinite, TraceWallsOnly);
-	static Float:endPos[3];
-	TR_GetEndPosition(endPos, trace);
-	CloseHandle(trace);
-	
-	return GetVectorDistance(position, targetPos, true) <= GetVectorDistance(position, endPos, true);
-}
-			
-stock FindRandomSpawn(bool:bluSpawn, bool:redSpawn)
-{
-	new spawn = -1;
-
-	// first, get a spawn count for the team(s) we care about
-	new spawnCount = 0;
-	new entity = -1;
-	while ((entity = FindEntityByClassname(entity, "info_player_teamspawn")) != -1)
-	{
-		new teamNum = GetEntProp(entity, Prop_Send, "m_iTeamNum");
-		if ((teamNum == BossTeam && bluSpawn) || (teamNum != BossTeam && redSpawn))
-			spawnCount++;
-	}
-
-	// ensure there's at least one valid spawn
-	if (spawnCount <= 0)
-		return -1;
-
-	// now randomly choose our spawn
-	new rand = GetRandomInt(0, spawnCount - 1);
-	spawnCount = 0;
-	while ((entity = FindEntityByClassname(entity, "info_player_teamspawn")) != -1)
-	{
-		new teamNum = GetEntProp(entity, Prop_Send, "m_iTeamNum");
-		if ((teamNum == BossTeam && bluSpawn) || (teamNum != BossTeam && redSpawn))
-		{
-			if (spawnCount == rand)
-				spawn = entity;
-			spawnCount++;
-			if (spawnCount == rand)
-				spawn = entity;
-		}
-	}
-	
-	return spawn;
-}
-
-stock GetLivingMercCount()
-{
-	// recalculate living players
-	new livingMercCount = 0;
-	for (new clientIdx = 1; clientIdx < MAX_PLAYERS; clientIdx++)
-		if (IsLivingPlayer(clientIdx) && GetClientTeam(clientIdx) != BossTeam)
-			livingMercCount++;
-	
-	return livingMercCount;
-}
-	
 stock ParseFloatRange(String:rangeStr[MAX_RANGE_STRING_LENGTH], &Float:min, &Float:max)
 {
 	new String:rangeStrs[2][32];
 	ExplodeString(rangeStr, ";", rangeStrs, 2, 32);
 	min = StringToFloat(rangeStrs[0]);
 	max = StringToFloat(rangeStrs[1]);
-}
-
-stock ParseHull(String:hullStr[MAX_HULL_STRING_LENGTH], Float:hull[2][3])
-{
-	new String:hullStrs[2][MAX_HULL_STRING_LENGTH / 2];
-	new String:vectorStrs[3][MAX_HULL_STRING_LENGTH / 6];
-	ExplodeString(hullStr, " ", hullStrs, 2, MAX_HULL_STRING_LENGTH / 2);
-	for (new i = 0; i < 2; i++)
-	{
-		ExplodeString(hullStrs[i], ",", vectorStrs, 3, MAX_HULL_STRING_LENGTH / 6);
-		hull[i][0] = StringToFloat(vectorStrs[0]);
-		hull[i][1] = StringToFloat(vectorStrs[1]);
-		hull[i][2] = StringToFloat(vectorStrs[2]);
-	}
 }
 
 stock bool:ReadFloatRange(bossIdx, const String:ability_name[], argInt, Float:range[2])
@@ -2212,34 +2026,11 @@ stock bool:ReadFloatRange(bossIdx, const String:ability_name[], argInt, Float:ra
 	return (strlen(rangeStr) >= 3); // minimum length for valid range is 3
 }
 
-stock ReadHull(bossIdx, const String:ability_name[], argInt, Float:hull[2][3])
-{
-	static String:hullStr[MAX_HULL_STRING_LENGTH];
-	FF2_GetAbilityArgumentString(bossIdx, this_plugin_name, ability_name, argInt, hullStr, MAX_HULL_STRING_LENGTH);
-	ParseHull(hullStr, hull);
-}
-
 stock ReadSound(bossIdx, const String:ability_name[], argInt, String:soundFile[MAX_SOUND_FILE_LENGTH])
 {
 	FF2_GetAbilityArgumentString(bossIdx, this_plugin_name, ability_name, argInt, soundFile, MAX_SOUND_FILE_LENGTH);
 	if (strlen(soundFile) > 3)
 		PrecacheSound(soundFile);
-}
-
-stock ReadMaterial(bossIdx, const String:ability_name[], argInt, String:modelFile[MAX_MATERIAL_FILE_LENGTH])
-{
-	FF2_GetAbilityArgumentString(bossIdx, this_plugin_name, ability_name, argInt, modelFile, MAX_MATERIAL_FILE_LENGTH);
-	if (strlen(modelFile) > 3)
-		PrecacheModel(modelFile);
-}
-
-stock ReadMaterialToInt(bossIdx, const String:ability_name[], argInt)
-{
-	static String:modelFile[MAX_MATERIAL_FILE_LENGTH];
-	FF2_GetAbilityArgumentString(bossIdx, this_plugin_name, ability_name, argInt, modelFile, MAX_MATERIAL_FILE_LENGTH);
-	if (strlen(modelFile) > 3)
-		return PrecacheModel(modelFile);
-	return -1;
 }
 
 stock ReadCenterText(bossIdx, const String:ability_name[], argInt, String:centerText[MAX_CENTER_TEXT_LENGTH])
@@ -2263,43 +2054,6 @@ stock ReadConditions(bossIdx, const String:ability_name[], argInt, TFCond:condit
 	}
 }
 
-public bool:TraceWallsOnly(entity, contentsMask)
-{
-	return false;
-}
-
-public bool:TraceRedPlayers(entity, contentsMask)
-{
-	if (IsLivingPlayer(entity) && GetClientTeam(entity) != BossTeam)
-	{
-		if (PRINT_DEBUG_SPAM)
-			PrintToServer("[improved_saxton] Hit player %d on trace.", entity);
-		return true;
-	}
-
-	return false;
-}
-
-public bool:TraceRedPlayersAndBuildings(entity, contentsMask)
-{
-	if (IsLivingPlayer(entity) && GetClientTeam(entity) != BossTeam)
-	{
-		if (PRINT_DEBUG_SPAM)
-			PrintToServer("[improved_saxton] Hit player %d on trace.", entity);
-		return true;
-	}
-	else if (IsValidEntity(entity))
-	{
-		static String:classname[MAX_ENTITY_CLASSNAME_LENGTH];
-		GetEntityClassname(entity, classname, sizeof(classname));
-		classname[4] = 0;
-		if (!strcmp(classname, "obj_")) // all buildings start with this
-			return true;
-	}
-
-	return false;
-}
-
 stock Float:fixAngle(Float:angle)
 {
 	new sanity = 0;
@@ -2321,14 +2075,6 @@ stock Float:GetVectorAnglesTwoPoints(const Float:startPos[3], const Float:endPos
 	GetVectorAngles(tmpVec, angles);
 }
 
-stock Float:GetVelocityFromPointsAndInterval(Float:pointA[3], Float:pointB[3], Float:deltaTime)
-{
-	if (deltaTime <= 0.0)
-		return 0.0;
-
-	return GetVectorDistance(pointA, pointB) * (1.0 / deltaTime);
-}
-
 stock Float:fixDamageForFF2(Float:damage)
 {
 	if (damage <= 160.0)
@@ -2336,25 +2082,7 @@ stock Float:fixDamageForFF2(Float:damage)
 	return damage;
 }
 
-stock QuietDamage(victim, inflictor, attacker, Float:damage, damageType=DMG_GENERIC, weapon=-1)
-{
-	new takedamage = GetEntProp(victim, Prop_Data, "m_takedamage");
-	SetEntProp(victim, Prop_Data, "m_takedamage", 0);
-	SDKHooks_TakeDamage(victim, inflictor, attacker, damage, damageType, weapon);
-	SetEntProp(victim, Prop_Data, "m_takedamage", takedamage);
-	SDKHooks_TakeDamage(victim, victim, victim, damage, damageType, weapon);
-}
-
-// for when damage to a hale needs to be recognized
-stock SemiHookedDamage(victim, inflictor, attacker, Float:damage, damageType=DMG_GENERIC, weapon=-1)
-{
-	if (GetClientTeam(victim) != BossTeam)
-		SDKHooks_TakeDamage(victim, inflictor, attacker, damage, damageType, weapon);
-	else
-		FullyHookedDamage(victim, inflictor, attacker, damage, damageType, weapon);
-}
-
-stock FullyHookedDamage(victim, inflictor, attacker, Float:damage, damageType=DMG_GENERIC, weapon=-1, Float:attackPos[3] = NULL_VECTOR)
+stock FullyHookedDamage(victim, attacker, Float:damage, damageType=DMG_GENERIC, Float:attackPos[3] = NULL_VECTOR)
 {
 	static String:dmgStr[16];
 	IntToString(RoundFloat(damage), dmgStr, sizeof(dmgStr));
@@ -2387,7 +2115,7 @@ stock FullyHookedDamage(victim, inflictor, attacker, Float:damage, damageType=DM
 }
 
 // this version ignores obstacles
-stock PseudoAmbientSound(clientIdx, String:soundPath[], count=1, Float:radius=1000.0, bool:skipSelf=false, bool:skipDead=false, Float:volumeFactor=1.0)
+stock PseudoAmbientSound(clientIdx, String:soundPath[], count=1, Float:radius=1000.0, bool:skipSelf=false, bool:skipDead=false)
 {
 	static Float:emitterPos[3];
 	static Float:listenerPos[3];
@@ -2395,7 +2123,7 @@ stock PseudoAmbientSound(clientIdx, String:soundPath[], count=1, Float:radius=10
 		GetEntPropVector(clientIdx, Prop_Send, "m_vecOrigin", emitterPos);
 	else
 		GetClientEyePosition(clientIdx, emitterPos);
-	for (new listener = 1; listener < MAX_PLAYERS; listener++)
+	for (new listener = 1; listener < MaxClients; listener++)
 	{
 		if (!IsClientInGame(listener))
 			continue;
@@ -2421,12 +2149,6 @@ stock PseudoAmbientSound(clientIdx, String:soundPath[], count=1, Float:radius=10
 		for (new i = 0; i < count; i++)
 			EmitSoundToClient(listener, soundPath, SOUND_FROM_PLAYER, SNDCHAN_AUTO, SNDLEVEL_NORMAL, SND_NOFLAGS, volume);
 	}
-}
-
-stock fixAngles(Float:angles[3])
-{
-	for (new i = 0; i < 3; i++)
-		angles[i] = fixAngle(angles[i]);
 }
 
 stock abs(x)
@@ -2464,17 +2186,6 @@ stock Float:fsquare(Float:x)
 	return x * x;
 }
 
-stock Float:DEG2RAD(Float:n) { return n * 0.017453; }
-
-stock Float:RAD2DEG(Float:n) { return n * 57.29578; }
-
-stock bool:WithinBounds(Float:point[3], Float:min[3], Float:max[3])
-{
-	return point[0] >= min[0] && point[0] <= max[0] &&
-		point[1] >= min[1] && point[1] <= max[1] &&
-		point[2] >= min[2] && point[2] <= max[2];
-}
-
 stock ReadHexOrDecInt(String:hexOrDecString[HEX_OR_DEC_STRING_LENGTH])
 {
 	if (StrContains(hexOrDecString, "0x") == 0)
@@ -2505,31 +2216,6 @@ stock ReadHexOrDecString(bossIdx, const String:ability_name[], argIdx)
 	return ReadHexOrDecInt(hexOrDecString);
 }
 
-stock Float:ConformAxisValue(Float:src, Float:dst, Float:distCorrectionFactor)
-{
-	return src - ((src - dst) * distCorrectionFactor);
-}
-
-stock ConformLineDistance(Float:result[3], const Float:src[3], const Float:dst[3], Float:maxDistance, bool:canExtend = false)
-{
-	new Float:distance = GetVectorDistance(src, dst);
-	if (distance <= maxDistance && !canExtend)
-	{
-		// everything's okay.
-		result[0] = dst[0];
-		result[1] = dst[1];
-		result[2] = dst[2];
-	}
-	else
-	{
-		// need to find a point at roughly maxdistance. (FP irregularities aside)
-		new Float:distCorrectionFactor = maxDistance / distance;
-		result[0] = ConformAxisValue(src[0], dst[0], distCorrectionFactor);
-		result[1] = ConformAxisValue(src[1], dst[1], distCorrectionFactor);
-		result[2] = ConformAxisValue(src[2], dst[2], distCorrectionFactor);
-	}
-}
-
 stock bool:CylinderCollision(Float:cylinderOrigin[3], Float:colliderOrigin[3], Float:maxDistance, Float:zMin, Float:zMax)
 {
 	if (colliderOrigin[2] < zMin || colliderOrigin[2] > zMax)
@@ -2547,48 +2233,9 @@ stock bool:CylinderCollision(Float:cylinderOrigin[3], Float:colliderOrigin[3], F
 	return GetVectorDistance(tmpVec1, tmpVec2, true) <= maxDistance * maxDistance;
 }
 
-stock bool:RectangleCollision(Float:hull[2][3], Float:point[3])
-{
-	return (point[0] >= hull[0][0] && point[0] <= hull[1][0]) &&
-		(point[1] >= hull[0][1] && point[1] <= hull[1][1]) &&
-		(point[2] >= hull[0][2] && point[2] <= hull[1][2]);
-}
-
 stock Float:getLinearVelocity(Float:vecVelocity[3])
 {
 	return SquareRoot((vecVelocity[0] * vecVelocity[0]) + (vecVelocity[1] * vecVelocity[1]) + (vecVelocity[2] * vecVelocity[2]));
-}
-
-stock Float:getBaseVelocityFromYaw(const Float:angle[3], Float:vel[3])
-{
-	vel[0] = Cosine(angle[1]); // same as unit circle
-	//vel[1] = -Sine(angle[1]); // inverse of unit circle
-	vel[1] = Sine(angle[1]); // ...or also same of unit circle? must not test in game at 3am...
-	vel[2] = 0.0; // unaffected
-}
-
-stock Float:RandomNegative(Float:someVal)
-{
-	return someVal * (GetRandomInt(0, 1) == 1 ? 1.0 : -1.0);
-}
-
-stock Float:GetRayAngles(Float:startPoint[3], Float:endPoint[3], Float:angle[3])
-{
-	static Float:tmpVec[3];
-	tmpVec[0] = endPoint[0] - startPoint[0];
-	tmpVec[1] = endPoint[1] - startPoint[1];
-	tmpVec[2] = endPoint[2] - startPoint[2];
-	GetVectorAngles(tmpVec, angle);
-}
-
-stock bool:AngleWithinTolerance(Float:entityAngles[3], Float:targetAngles[3], Float:tolerance)
-{
-	static bool:tests[2];
-	
-	for (new i = 0; i < 2; i++)
-		tests[i] = fabs(entityAngles[i] - targetAngles[i]) <= tolerance || fabs(entityAngles[i] - targetAngles[i]) >= 360.0 - tolerance;
-	
-	return tests[0] && tests[1];
 }
 
 stock constrainDistance(const Float:startPoint[], Float:endPoint[], Float:distance, Float:maxDistance)
@@ -2602,33 +2249,11 @@ stock constrainDistance(const Float:startPoint[], Float:endPoint[], Float:distan
 	endPoint[2] = ((endPoint[2] - startPoint[2]) * constrainFactor) + startPoint[2];
 }
 
-stock bool:signIsDifferent(const Float:one, const Float:two)
-{
-	return one < 0.0 && two > 0.0 || one > 0.0 && two < 0.0;
-}
 
 stock GetA(c) { return abs(c>>24); }
 stock GetR(c) { return abs((c>>16)&0xff); }
 stock GetG(c) { return abs((c>>8 )&0xff); }
 stock GetB(c) { return abs((c    )&0xff); }
-
-stock ColorToDecimalString(String:buffer[COLOR_BUFFER_SIZE], rgb)
-{
-	Format(buffer, COLOR_BUFFER_SIZE, "%d %d %d", GetR(rgb), GetG(rgb), GetB(rgb));
-}
-
-stock BlendColorsRGB(oldColor, Float:oldWeight, newColor, Float:newWeight)
-{
-	new r = min(RoundFloat((GetR(oldColor) * oldWeight) + (GetR(newColor) * newWeight)), 255);
-	new g = min(RoundFloat((GetG(oldColor) * oldWeight) + (GetG(newColor) * newWeight)), 255);
-	new b = min(RoundFloat((GetB(oldColor) * oldWeight) + (GetB(newColor) * newWeight)), 255);
-	return (r<<16) + (g<<8) + b;
-}
-
-stock Nope(clientIdx)
-{
-	EmitSoundToClient(clientIdx, NOPE_AVI);
-}
 
 // stole this stock from KissLick. it's a good stock!
 stock DispatchKeyValueFormat(entity, const String:keyName[], const String:format[], any:...)
@@ -2637,15 +2262,6 @@ stock DispatchKeyValueFormat(entity, const String:keyName[], const String:format
 	VFormat(value, sizeof(value), format, 4);
 
 	DispatchKeyValue(entity, keyName, value);
-} 
-
-stock bool:PlayerIsInvincible(clientIdx)
-{
-	return TF2_IsPlayerInCondition(clientIdx, TFCond_Ubercharged) ||
-		TF2_IsPlayerInCondition(clientIdx, TFCond_UberchargedHidden) ||
-		TF2_IsPlayerInCondition(clientIdx, TFCond_UberchargedCanteen) ||
-		TF2_IsPlayerInCondition(clientIdx, TFCond_UberchargedOnTakeDamage) ||
-		TF2_IsPlayerInCondition(clientIdx, TFCond_Bonked);
 }
 
 stock bool:CheckGroundClearance(clientIdx, Float:minClearance, bool:failInWater)
@@ -2669,13 +2285,6 @@ stock bool:CheckGroundClearance(clientIdx, Float:minClearance, bool:failInWater)
 	return origin[2] - endPos[2] >= minClearance;
 }
 
-stock bool:IsInstanceOf(entity, const String:desiredClassname[])
-{
-	static String:classname[MAX_ENTITY_CLASSNAME_LENGTH];
-	GetEntityClassname(entity, classname, MAX_ENTITY_CLASSNAME_LENGTH);
-	return strcmp(classname, desiredClassname) == 0;
-}
-
 // need to distinguish being fully in water and not, which is a little more complicated than it should be
 stock bool:IsFullyInWater(clientIdx)
 {
@@ -2693,12 +2302,6 @@ stock bool:IsFullyInWater(clientIdx)
 stock bool:IsTreadingWater(clientIdx)
 {
 	return (GetEntityFlags(clientIdx) & FL_ONGROUND) == 0 && GetEntProp(clientIdx, Prop_Send, "m_nWaterLevel") == 1;
-}
-
-stock bool:ShouldGetZBoost(clientIdx)
-{
-	new flags = GetEntityFlags(clientIdx);
-	return (flags & FL_ONGROUND) != 0 || ((flags & (FL_SWIM | FL_INWATER)) != 0 && !IsFullyInWater(clientIdx));
 }
 
 stock CreateSaxtonProp()
