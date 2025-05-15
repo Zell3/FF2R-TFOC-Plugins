@@ -17,7 +17,8 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-float            duration[MAXPLAYERS + 1];  // Time of aimbot
+#define INACTIVE       100000000.0
+
 public Plugin myinfo =
 {
   name        = "[FF2R] AimBot",
@@ -26,10 +27,24 @@ public Plugin myinfo =
   version     = "1.0.1",
 };
 
+float            duration[MAXPLAYERS + 1];  // Time of aimbot
+
+public void OnPluginStart()
+{
+  for (int client = 1; client <= MaxClients; client++)
+  {
+    duration[client] = INACTIVE;
+  }
+}
+
 public void OnPluginEnd()
 {
   for (int client = 1; client <= MaxClients; client++)
   {
+    if (duration[client] != INACTIVE)
+    {
+      duration[client] = INACTIVE;
+    }
     if (IsClientInGame(client) && FF2R_GetBossData(client))
     {
       FF2R_OnBossRemoved(client);
@@ -53,6 +68,9 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 
 public void AimThink(int client)
 {
+  if (GetEngineTime() >= duration[client] || duration[client] == INACTIVE)
+    SDKUnhook(client, SDKHook_PreThink, AimThink);
+
   int   i = GetClosestClient(client);
   float clientEye[3], iEye[3], clientAngle[3];
   GetClientEyePosition(client, clientEye);
@@ -60,9 +78,6 @@ public void AimThink(int client)
   GetVectorAnglesTwoPoints(clientEye, iEye, clientAngle);
   AnglesNormalize(clientAngle);
   TeleportEntity(client, NULL_VECTOR, clientAngle, NULL_VECTOR);
-
-  if (GetEngineTime() >= aimbot_duration)
-    SDKUnhook(client, SDKHook_PreThink, AimThink);
 }
 
 stock int GetClosestClient(int client)
@@ -101,7 +116,7 @@ stock void AnglesNormalize(float vAngles[3])
     vAngles[1] += 360.0;
 }
 
-stock float GetVectorAnglesTwoPoints(const float vStartPos[3], const float vEndPos[3], float vAngles[3])
+stock void GetVectorAnglesTwoPoints(const float vStartPos[3], const float vEndPos[3], float vAngles[3])
 {
   static float tmpVec[3];
   tmpVec[0] = vEndPos[0] - vStartPos[0];
