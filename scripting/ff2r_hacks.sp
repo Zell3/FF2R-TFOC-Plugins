@@ -539,8 +539,21 @@ public bool TraceRayGrab(int entityhit, int mask, any self)
 public void ConvertToTeam(int client, TFTeam team)
 {
   SetEntProp(client, Prop_Send, "m_lifeState", 2);
-  TF2_ChangeClientTeam(client, team);
+
+  ChangeClientTeam(client, view_as<int>(team));
+
   SetEntProp(client, Prop_Send, "m_lifeState", 0);
+
+  if (GetEntProp(client, Prop_Send, "m_bDucked"))
+  {
+    float collisionvec[3];
+    collisionvec[0] = 24.0;
+    collisionvec[1] = 24.0;
+    collisionvec[2] = 62.0;
+    SetEntPropVector(client, Prop_Send, "m_vecMaxs", collisionvec);
+    SetEntProp(client, Prop_Send, "m_bDucked", 1);
+    SetEntityFlags(client, FL_DUCKING);
+  }
 }
 
 public float GetBossCharge(ConfigData cfg, const char[] slot)
