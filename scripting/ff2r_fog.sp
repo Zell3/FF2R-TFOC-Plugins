@@ -1,320 +1,334 @@
 /*
   "rage_fog_fx"		// Ability name can use suffixes
   {
-    "slot"			"0"
+    "slot"			  "0"
 
-    "dalay"			"0"
+    // delay before applying the fog effect
+    "delay"			  "0"
 
     //colors
-    "color1"		"255 255 255"		// RGB colors
-    "color2"		"255 255 255"		// RGB colors
+    "color1"		  "255 255 255"		// RGB colors
+    "color2"		  "255 255 255"		// RGB colors
 
     // fog properties
-    "blend"			"0" 				// blend
-    "fog start"		"64.0"				// fog start distance
-    "fog end"		"384.0"				// fog end distance
-    "fog density"	"1.0"				// fog density
+    "blend"			  "0" 				    // blend
+    "fog start"		"64.0"				  // fog start distance
+    "fog end"		  "384.0"				  // fog end distance
+    "fog density"	"1.0"				    // fog density
 
     // effect properties
-    "effect type"	"0"					// fog effect: 0: Everyone, 1: Only Self, 2:Team, 3: Enemy Team, 4: Everyone besides self
-    "duration"		"5.0"				// fog duration
+    "effect type"	"0"					    // fog effect: 0: Everyone, 1: Only Self, 2:Team, 3: Enemy Team, 4: Everyone besides self
+    "duration"		"5.0"				    // fog duration 0.0 means forever
 
     "plugin_name"	"ff2r_fog"
   }
 
-  "fog_fx"			// Ability name can't use suffixes
+  "fog_fx"		// Ability name can use suffixes
   {
-    "slot"			"0"
+    // slot is ignored
 
     //colors
-    "color1"		"255 255 255"		// RGB colors
-    "color2"		"255 255 255"		// RGB colors
+    "color1"		  "255 255 255"		// RGB colors
+    "color2"		  "255 255 255"		// RGB colors
 
     // fog properties
-    "blend"			"0" 				// blend
-    "fog start"		"64.0"				// fog start distance
-    "fog end"		"384.0"				// fog end distance
-    "fog density"	"1.0"				// fog density
+    "blend"			  "0" 				    // blend
+    "fog start"		"64.0"				  // fog start distance
+    "fog end"		  "384.0"				  // fog end distance
+    "fog density"	"1.0"				    // fog density
 
     // effect properties
-    "effect type"	"0"					// fog effect: 0: Everyone, 1: Only Self, 2:Team, 3: Enemy Team, 4: Everyone besides self
+    "effect type"	"0"					    // fog effect: 0: Everyone, 1: Only Self, 2:Team, 3: Enemy Team, 4: Everyone besides self
+
     "plugin_name"	"ff2r_fog"
   }
+*/
 
+/*
+  remove "effect range" because it also applied to client when respawned
+  also it was useless to have range when everyone always set to 9999.0 anyway
 */
 
 #include <sourcemod>
-#include <sdktools>
-#include <sdkhooks>
 #include <cfgmap>
 #include <ff2r>
+#include <sdktools>
+#include <sdkhooks>
 #include <tf2>
 
 #pragma semicolon 1
 #pragma newdecls required
 
-#define VERSION_NUMBER "1.0.6"
+#define INACTIVE 100000000.0
+
 public Plugin myinfo =
 {
-  name        = "Freak Fortress 2: Fog Effects",
-  description = "Fog Effects, Darken Has Come",  //"フォグ効果" Sorry Shadow. We really need something universal that everyone can understand
+  name        = "Freak Fortress 2 Rewrite: Fog Effects",
+  description = "Fog Effects System for FF2R",
   author      = "Koishi, J0BL3SS, Zell",
-  version     = VERSION_NUMBER,
+  version     = "1.2.0",
 };
 
-int   envFog = -1;
-bool  IsFogActive;
-bool  IsRound;
-int   effectboss;
-float fogDuration[MAXPLAYERS + 1];
+enum struct FogSettings
+{
+  int   controller;
+  bool  isActive;
+  int   effectType;
+  float duration;
+  char  color1[16];
+  char  color2[16];
+  char  blend;
+  float fogStart;
+  float fogEnd;
+  float density;
+}
 
+FogSettings g_FogData;
+
+float       g_flClientFogDuration[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
+  // Event hooks
   HookEvent("arena_win_panel", Event_RoundEnd);
-  HookEvent("teamplay_round_win", Event_RoundEnd);  // for non-arena maps
-  HookEvent("player_spawn", Event_PlayerSpawn);  // reanimator respawn - no fog bug fix
+  HookEvent("teamplay_round_win", Event_RoundEnd);
+  HookEvent("player_spawn", Event_PlayerSpawn);
+
+  g_FogData.controller = -1;
+
+  // Initialize all clients' fog duration to INACTIVE
+  for (int i = 0; i <= MaxClients; i++)
+    g_flClientFogDuration[i] = INACTIVE;
+}
+
+public void OnPluginEnd()
+{
+  // unhook events
+  UnhookEvent("arena_win_panel", Event_RoundEnd);
+  UnhookEvent("teamplay_round_win", Event_RoundEnd);
+  UnhookEvent("player_spawn", Event_PlayerSpawn);
+
+  // Cleanup
+  g_FogData.controller = -1;
+  RemoveFog();
 
   for (int client = 1; client <= MaxClients; client++)
   {
-    if (IsClientInGame(client))
+    if (IsValidClient(client))
     {
-      BossData cfg = FF2R_GetBossData(client);
-      if (cfg)
-      {
-        FF2R_OnBossCreated(client, cfg, false);
-      }
+      SDKUnhook(client, SDKHook_PreThinkPost, Timer_FogDuration);
     }
   }
 }
 
-public void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
-{
-  int target = GetClientOfUserId(GetEventInt(event, "userid"));
-  if (!IsValidClient(target))
-    return;
-
-  if (IsFogActive)
-  {
-    for (int client = 1; client <= MaxClients; client++)
-    {
-      BossData boss = FF2R_GetBossData(client);
-      if (boss)
-      {
-        if (FogEffectType(client, target))
-        {
-            SetVariantString("MyFog");
-            AcceptEntityInput(target, "SetFogController");
-        }
-      }
-    }
-  }
-}
-
-public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
-{
-  KillFog(envFog);
-
-  for (int client = 1; client <= MaxClients; client++)
-  {
-    if (!IsValidClient(client))
-      continue;
-
-    SDKUnhook(client, SDKHook_PreThinkPost, FogTimer);
-  }
-  IsRound = false;
-  envFog = -1;
-}
-
-// if (!setup || FF2R_GetGamemodeType() != 2)
 public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 {
+  // fog_fx is a passive ability
+  // apply before the round starts
   if (!(!setup || FF2R_GetGamemodeType() != 2))
   {
     AbilityData passive = cfg.GetAbility("fog_fx");
     if (passive.IsMyPlugin())
-      PrepareFog(client, "fog_fx", passive);
+    {
+      LoadFogSettings(passive);
+      ApplyFogEffect(client, 0.0);
+    }
   }
-  if (!setup || FF2R_GetGamemodeType() != 2)
-    IsRound = true;
 }
 
 public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 {
-  if (!IsRound)
-    return;
-
   if (!StrContains(ability, "rage_fog_fx", false) && cfg.IsMyPlugin())
   {
     float    delay = cfg.GetFloat("delay", 0.0);
     DataPack pack;
-    CreateDataTimer(delay, FogDelay, pack);
-    pack.WriteCell(client);
-    pack.WriteString(ability);
+    CreateDataTimer(delay, Timer_ApplyRageFog, pack, TIMER_FLAG_NO_MAPCHANGE);
+    pack.WriteCell(GetClientUserId(client));
     pack.WriteCell(cfg);
   }
 }
 
-public Action FogDelay(Handle timer, DataPack pack)
+// applied fog effect to the client if the client is a target
+public void Event_PlayerSpawn(Event event, const char[] name, bool dontBroadcast)
+{
+  int client = GetClientOfUserId(event.GetInt("userid"));
+  // check if the client is valid and if the fog is active
+  if (!IsValidClient(client) || !g_FogData.isActive)
+    return;
+
+  // get the boss data for the client
+  for (int boss = 1; boss <= MaxClients; boss++)
+  {
+    BossData cfg = FF2R_GetBossData(boss);
+    if (cfg && IsTarget(boss, client))
+    {
+      SetFogController(client);
+      break;
+    }
+  }
+}
+
+// remove fog when the round ends
+public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
+{
+  RemoveFog();
+
+  for (int client = 1; client <= MaxClients; client++)
+    if (IsValidClient(client))
+      SDKUnhook(client, SDKHook_PreThinkPost, Timer_FogDuration);
+}
+
+// delayed fog apply
+public Action Timer_ApplyRageFog(Handle timer, DataPack pack)
 {
   pack.Reset();
-  int  client = pack.ReadCell();
-  char buffer[1024];
-  pack.ReadString(buffer, 1024);
+  int client = GetClientOfUserId(pack.ReadCell());
+
+  if (!client)
+    return Plugin_Handled;
+
   AbilityData cfg = pack.ReadCell();
 
-  PrepareFog(client, buffer, cfg);
-
+  LoadFogSettings(cfg);
+  ApplyFogEffect(client, cfg.GetFloat("duration", 0.0));
   return Plugin_Continue;
 }
 
-public void PrepareFog(int client, const char[] ability_name, AbilityData ability)
+// load fog settings from the ability data
+public void LoadFogSettings(AbilityData cfg)
 {
-  char  colors[3][16];
-  float distance;
-  ability.GetString("blend", colors[0], 16);
-  ability.GetString("color1", colors[1], 16);
-  ability.GetString("color2", colors[2], 16);
-  effectboss = ability.GetInt("effect type", 0);
-  distance   = 9999.0;
+  g_FogData.effectType = cfg.GetInt("effect type", 0);
+  cfg.GetString("blend", g_FogData.blend, sizeof(FogSettings::blend), "0");
+  cfg.GetString("color1", g_FogData.color1, sizeof(FogSettings::color1), "255 255 255");
+  cfg.GetString("color2", g_FogData.color2, sizeof(FogSettings::color2), "255 255 255");
+  g_FogData.fogStart = cfg.GetFloat("fog start", 64.0);
+  g_FogData.fogEnd   = cfg.GetFloat("fog end", 384.0);
+  g_FogData.density  = cfg.GetFloat("fog density", 1.0);
+}
 
-  if (!StrContains(ability_name, "rage_fog_fx", false))  // add time and proper range if its normal fog
-    distance = ability.GetFloat("effect range", 9999.0);
+public void ApplyFogEffect(int client, float duration)
+{
+  if (g_FogData.controller != -1)
+    RemoveFog();
 
-  envFog = CreateFog(colors[0], colors[1], colors[2],
-                     ability.GetFloat("fog start", 64.0), ability.GetFloat("fog end", 384.0), ability.GetFloat("fog density", 1.0));
-
-  float pos1[3], pos2[3];
-  GetClientAbsOrigin(client, pos1);
+  g_FogData.controller = CreateFogController();
+  if (g_FogData.controller == -1)
+    return;
 
   for (int target = 1; target <= MaxClients; target++)
   {
-    if (IsValidClient(target))
-    {
-      GetClientAbsOrigin(target, pos2);
-      if (GetVectorDistance(pos1, pos2) <= distance)
-      {
-        if (FogEffectType(client, target))
-        {
-          if (!StrContains(ability_name, "rage_fog_fx", false))
-          {
-            if (IsFogActive)
-            {
-              fogDuration[target] += ability.GetFloat("duration", 8.0);
-            }
-            else
-            {
-              fogDuration[target] = GetGameTime() + ability.GetFloat("duration", 8.0);
-              SDKHook(target, SDKHook_PreThinkPost, FogTimer);
-            }
-          }
+    if (!IsValidClient(target))
+      continue;
 
-          SetVariantString("MyFog");
-          AcceptEntityInput(target, "SetFogController");
-        }
-      }
-    }
+    if (IsTarget(client, target))
+      SetFogController(target);
   }
-}
 
-public void FogTimer(int client)
-{
-  if (GetGameTime() >= fogDuration[client])
+  // why you need to set fog duration more than 5 minutes when round time is around 7 minutes
+  if (duration > 0.0 && duration < 300.0)
   {
-    KillFog(envFog);
-    IsFogActive = false;
-    SDKUnhook(client, SDKHook_PreThinkPost, FogTimer);
-    envFog = -1;
+    g_flClientFogDuration[client] = GetGameTime() + duration;
+    SDKHook(client, SDKHook_PreThinkPost, Timer_FogDuration);  // Hook the client to check for fog duration
   }
 }
 
-stock int CreateFog(char[] fogblend, char[] fogcolor1, char[] fogcolor2, float fogstart = 64.0, float fogend = 384.0, float fogdensity = 1.0)
+// create fog controller entity
+public int CreateFogController()
 {
-  int iFog = CreateEntityByName("env_fog_controller");
-  if (IsValidEntity(iFog))
-  {
-    DispatchKeyValue(iFog, "targetname", "MyFog");
-    DispatchKeyValue(iFog, "fogenable", "1");
-    DispatchKeyValue(iFog, "spawnflags", "1");
-    DispatchKeyValue(iFog, "fogblend", fogblend);
-    DispatchKeyValue(iFog, "fogcolor", fogcolor1);
-    DispatchKeyValue(iFog, "fogcolor2", fogcolor2);
-    DispatchKeyValueFloat(iFog, "fogstart", fogstart);
-    DispatchKeyValueFloat(iFog, "fogend", fogend);
-    DispatchKeyValueFloat(iFog, "fogmaxdensity", fogdensity);
-    DispatchSpawn(iFog);
-    AcceptEntityInput(iFog, "TurnOn");
-    IsFogActive = true;
-  }
-  return iFog;
+  int ent = CreateEntityByName("env_fog_controller");
+  if (!IsValidEntity(ent))
+    return -1;
+
+  DispatchKeyValue(ent, "targetname", "MyFog");
+  DispatchKeyValue(ent, "fogenable", "1");
+  DispatchKeyValue(ent, "spawnflags", "1");
+  DispatchKeyValue(ent, "fogblend", g_FogData.blend);
+  DispatchKeyValue(ent, "fogcolor", g_FogData.color1);
+  DispatchKeyValue(ent, "fogcolor2", g_FogData.color2);
+  DispatchKeyValueFloat(ent, "fogstart", g_FogData.fogStart);
+  DispatchKeyValueFloat(ent, "fogend", g_FogData.fogEnd);
+  DispatchKeyValueFloat(ent, "fogmaxdensity", g_FogData.density);
+  DispatchSpawn(ent);
+  AcceptEntityInput(ent, "TurnOn");
+  g_FogData.isActive = true;
+
+  return ent;
 }
 
-stock void KillFog(int iEnt)
+// set fog controller to the client
+public void SetFogController(int client)
 {
-  if (IsValidEdict(iEnt) && iEnt > MaxClients)
+  if (IsValidEntity(g_FogData.controller))
   {
-    for (int i = 1; i <= MaxClients; i++)
-    {
-      if (IsValidClient(i))
-      {
-        SetVariantString("");
-        AcceptEntityInput(i, "SetFogController");
-      }
-    }
-    AcceptEntityInput(iEnt, "Kill");
-    iEnt        = -1;
-    IsFogActive = false;
+    SetVariantString("MyFog");
+    AcceptEntityInput(client, "SetFogController");
   }
 }
 
-stock bool FogEffectType(int client, int target)
+// remove fog (when removed we should remove all fog for clients too because fog should only have one controller)
+public void RemoveFog()
 {
-  switch (effectboss)
+  if (!IsValidEntity(g_FogData.controller))
+    return;
+
+  for (int client = 1; client <= MaxClients; client++)
   {
-    case 1:  // if target is boss,
+    if (IsValidClient(client))
     {
-      if (client == target)
-        return true;
-      else return false;
+      SetVariantString("");
+      AcceptEntityInput(client, "SetFogController");
+      g_flClientFogDuration[client] = INACTIVE;  // Add this line
     }
-    case 2:  // if target's team same team as boss's team
-    {
-      if (GetClientTeam(target) == GetClientTeam(client))
-        return true;
-      else return false;
-    }
-    case 3:  // if target's team is not same team as boss's team
-    {
-      if (GetClientTeam(target) != GetClientTeam(client))
-        return true;
-      else return false;
-    }
-    case 4:  // if target is not boss
-    {
-      if (client != target)
-        return true;
-      else return false;
-    }
-    default:  // effect everyone
-    {
-      return true;
-    }
+  }
+
+  AcceptEntityInput(g_FogData.controller, "Kill");
+  g_FogData.controller = -1;
+  g_FogData.isActive   = false;
+}
+
+public void Timer_FogDuration(int client)
+{
+  // this will be called when the duration of the fog is over and it will auto unhook if round is over
+  if (GetGameTime() >= g_flClientFogDuration[client])
+  {
+    g_flClientFogDuration[client] = INACTIVE;
+    SDKUnhook(client, SDKHook_PreThinkPost, Timer_FogDuration);
+    if (g_FogData.isActive)
+      RemoveFog();
   }
 }
 
+// check if the client is a target for the fog effect
+stock bool IsTarget(int boss, int target)
+{
+  switch (g_FogData.effectType)
+  {
+    case 1: return boss == target;                                // Only boss
+    case 2: return GetClientTeam(boss) == GetClientTeam(target);  // Same team
+    case 3: return GetClientTeam(boss) != GetClientTeam(target);  // Enemy team
+    case 4: return boss != target;                                // Everyone except boss
+    default: return true;                                         // Everyone
+  }
+}
+
+// very very useful stock i used it everywhere
 stock bool IsValidClient(int client, bool replaycheck = true)
 {
   if (client <= 0 || client > MaxClients)
+  {
     return false;
-
+  }
   if (!IsClientInGame(client) || !IsClientConnected(client))
+  {
     return false;
-
+  }
   if (GetEntProp(client, Prop_Send, "m_bIsCoaching"))
+  {
     return false;
-
+  }
   if (replaycheck && (IsClientSourceTV(client) || IsClientReplay(client)))
+  {
     return false;
-
+  }
   return true;
 }
