@@ -32,10 +32,12 @@ public Plugin myinfo =
 };
 
 float g_flBoost[MAXPLAYERS + 1];
+float g_flBoostOriginal[MAXPLAYERS + 1];
 int   g_fLastButtons[MAXPLAYERS + 1];
 int   g_fLastFlags[MAXPLAYERS + 1];
 int   g_iJumps[MAXPLAYERS + 1];
 int   g_iJumpMax[MAXPLAYERS + 1];
+int   g_iJumpMaxOriginal[MAXPLAYERS + 1];
 bool  g_bIsTarget[MAXPLAYERS + 1];
 
 float g_fDuration[MAXPLAYERS + 1];
@@ -46,10 +48,12 @@ public void OnPluginStart()
   {
     // Initialize all players
     g_flBoost[client]      = 0.0;
+    g_flBoostOriginal[client] = 0.0;
     g_fLastButtons[client] = 0;
     g_fLastFlags[client]   = 0;
     g_iJumps[client]       = 0;
     g_iJumpMax[client]     = 0;
+    g_iJumpMaxOriginal[client] = 0;
     g_bIsTarget[client]    = false;
     g_fDuration[client]    = INACTIVE;
   }
@@ -61,10 +65,12 @@ public void OnPluginEnd()
   {
     // Reset all players
     g_flBoost[client]      = 0.0;
+    g_flBoostOriginal[client] = 0.0;
     g_fLastButtons[client] = 0;
     g_fLastFlags[client]   = 0;
     g_iJumps[client]       = 0;
     g_iJumpMax[client]     = 0;
+    g_iJumpMaxOriginal[client] = 0;
     g_bIsTarget[client]    = false;
     g_fDuration[client]    = INACTIVE;
   }
@@ -75,10 +81,12 @@ public void FF2R_OnBossRemoved(int clientIdx)
   for (int i = 1; i <= MaxClients; i++)
   {
     g_flBoost[i]      = 0.0;
+    g_flBoostOriginal[i] = 0.0;
     g_fLastButtons[i] = 0;
     g_fLastFlags[i]   = 0;
     g_iJumps[i]       = 0;
     g_iJumpMax[i]     = 0;
+    g_iJumpMaxOriginal[i] = 0;
     g_bIsTarget[i]    = false;
     g_fDuration[i]    = INACTIVE;
   }
@@ -92,10 +100,33 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
     {
       if (IsValidClient(i))
       {
-        g_flBoost[i]   = cfg.GetFloat("velocity", 250.0);
-        g_iJumpMax[i]  = cfg.GetInt("max", 1);
-        g_fDuration[i] = GetEngineTime() + cfg.GetFloat("duration", 10.0);
-        g_bIsTarget[i] = IsTarget(client, i, cfg.GetInt("target", 0));
+        bool isTarget = IsTarget(client, i, cfg.GetInt("target", 0));
+        
+        // Only update settings if this client is a target or hasn't been set yet
+        if (isTarget || !g_bIsTarget[i])
+        {
+          float velocity = cfg.GetFloat("velocity", 250.0);
+          int maxJumps = cfg.GetInt("max", 1);
+          
+          // Store the better values
+          if (!g_bIsTarget[i] || velocity > g_flBoost[i])
+          {
+            g_flBoost[i] = velocity;
+          }
+          if (!g_bIsTarget[i] || maxJumps > g_iJumpMax[i])
+          {
+            g_iJumpMax[i] = maxJumps;
+          }
+          
+          // Update duration if longer
+          float newDuration = GetEngineTime() + cfg.GetFloat("duration", 10.0);
+          if (!g_bIsTarget[i] || newDuration > g_fDuration[i])
+          {
+            g_fDuration[i] = newDuration;
+          }
+          
+          g_bIsTarget[i] = true;
+        }
       }
     }
   }
