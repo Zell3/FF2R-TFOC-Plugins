@@ -56,6 +56,9 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 
   if (!StrContains(ability, "rage_nightmare", false))
   {
+    if (duration != INACTIVE)
+      duration = INACTIVE;
+
     // disable item drops
     tf_dropped_weapon_lifetime = GetConVarInt(FindConVar("tf_dropped_weapon_lifetime"));
     if (tf_dropped_weapon_lifetime != 0)
@@ -78,10 +81,10 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
     }
 
     duration    = GetEngineTime() + cfg.GetFloat("duration", 0.0);  // Timer of the Team confusion
-    int  health = cfg.GetInt("health", 0);                        // red team health (can't use formula)
-    char models[PLATFORM_MAX_PATH];                               // Model for the victims
-    char classname[MAX_WEAPON_NAME_LENGTH];                       // Classname of the weapon the victims get
-    char attribute[MAX_WEAPON_ARG_LENGTH];                        // Attributes of the weapon the victims get
+    int  health = cfg.GetInt("health", 0);                          // red team health (can't use formula)
+    char models[PLATFORM_MAX_PATH];                                 // Model for the victims
+    char classname[MAX_WEAPON_NAME_LENGTH];                         // Classname of the weapon the victims get
+    char attribute[MAX_WEAPON_ARG_LENGTH];                          // Attributes of the weapon the victims get
 
     char buffer[32];
     cfg.GetString("class", buffer, sizeof(buffer));
