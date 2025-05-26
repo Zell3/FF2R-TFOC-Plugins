@@ -45,13 +45,13 @@
 */
 
 #include <sourcemod>
+#include <sdktools>
+#include <sdkhooks>
 #include <cfgmap>
-#include <ff2r>
 #include <tf2items>
 #include <tf2_stocks>
-#include <sdkhooks>
-#include <sdktools>
 #include <tf2attributes>
+#include <ff2r>
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -80,12 +80,14 @@ enum struct MultiplierData
   Handle hud;
 }
 
-ArrayList g_MultiplierData[MAXPLAYERS + 1];
-ArrayList g_PassiveData[MAXPLAYERS + 1];
+ArrayList   g_MultiplierData[MAXPLAYERS + 1];
+ArrayList   g_PassiveData[MAXPLAYERS + 1];
 
 // kill count for each player
-int       Killcount[MAXPLAYERS + 1];
+int         Killcount[MAXPLAYERS + 1];
 
+float       g_NextHudUpdate[MAXPLAYERS + 1];
+const float HUD_UPDATE_INTERVAL = 0.1;  // Update HUD every 0.1 seconds
 public Plugin myinfo =
 {
   name        = "[FF2R] Dark Realms Erandicator Abilities",
@@ -180,11 +182,11 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 
       MultiplierData data;
       data.meleeMultiplier     = multiplierAbility.GetFloat("melee_multiplier", 0.0);
-      data.meleeKills          = multiplierAbility.GetInt("melee_kills", 0);
+      data.meleeKills          = multiplierAbility.GetInt("melee_kills", -1);
       data.secondaryMultiplier = multiplierAbility.GetFloat("secondary_multiplier", 0.0);
-      data.secondaryKills      = multiplierAbility.GetInt("secondary_kills", 0);
+      data.secondaryKills      = multiplierAbility.GetInt("secondary_kills", -1);
       data.primaryMultiplier   = multiplierAbility.GetFloat("primary_multiplier", 0.0);
-      data.primaryKills        = multiplierAbility.GetInt("primary_kills", 0);
+      data.primaryKills        = multiplierAbility.GetInt("primary_kills", -1);
 
       if (multiplierAbility.GetBool("hud", false))
       {
@@ -204,9 +206,6 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
           SDKHook(i, SDKHook_OnTakeDamage, OnTakeDamage);
         }
       }
-
-      // and we need to sdk hook the boss
-      SDKHook(client, SDKHook_PreThink, DarkRealmMultiplier_Prethink);
     }
   }
 }
@@ -234,14 +233,111 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
       if (g_MultiplierData[client].Length > 0)
       {
         g_MultiplierData[client].Clear();
-        SDKUnhook(client, SDKHook_PreThink, DarkRealmMultiplier_Prethink);
       }
     }
   }
 
-  // then we need to clear the state
   g_State.passiveEnabled    = false;
   g_State.multiplierEnabled = false;
+}
+
+public void OnGameFrame()
+{
+  float currentTime = GetEngineTime();
+
+  if (!g_State.multiplierEnabled)
+    return;
+
+  for (int client = 1; client <= MaxClients; client++)
+  {
+    if (!IsValidClient(client, false) || !IsPlayerAlive(client))
+      continue;
+
+    if (g_MultiplierData[client].Length == 0)
+      continue;
+
+    MultiplierData data;
+    g_MultiplierData[client].GetArray(0, data);
+
+    if (data.hud != INVALID_HANDLE)
+    {
+      // Only update HUD at specified intervals
+      if (currentTime < g_NextHudUpdate[client])
+        continue;
+
+      g_NextHudUpdate[client] = currentTime + HUD_UPDATE_INTERVAL;
+
+      char      hudText[256]  = "Kills: %i";
+      ArrayList params        = new ArrayList();
+      params.Push(Killcount[client]);
+
+      // Only show multipliers that aren't disabled (-1)
+      if (data.meleeKills != -1)
+      {
+        float meleeMultiplier = SafeCalculateMultiplier(data.meleeMultiplier, Killcount[client], data.meleeKills);
+        StrCat(hudText, sizeof(hudText), " | Melee DMG x %.2f");
+        params.Push(meleeMultiplier);
+      }
+
+      if (data.secondaryKills != -1)
+      {
+        float secondaryMultiplier = SafeCalculateMultiplier(data.secondaryMultiplier, Killcount[client], data.secondaryKills);
+        StrCat(hudText, sizeof(hudText), " | Secondary DMG x %.2f");
+        params.Push(secondaryMultiplier);
+      }
+
+      if (data.primaryKills != -1)
+      {
+        float primaryMultiplier = SafeCalculateMultiplier(data.primaryMultiplier, Killcount[client], data.primaryKills);
+        StrCat(hudText, sizeof(hudText), " | Primary DMG x %.2f");
+        params.Push(primaryMultiplier);
+      }
+
+      // Display HUD with dynamic format string
+      SetHudTextParams(-1.0, 0.73, HUD_UPDATE_INTERVAL + 0.1, 255, 255, 255, 255, 0, 0.0, 0.0, 0.0);
+
+      // Convert ArrayList to array for ShowSyncHudText
+      any[] values = new any[params.Length];
+      int length   = 0;
+      for (int i = 0; i < params.Length; i++)
+      {
+        values[i] = params.Get(i);
+        length++;
+      }
+
+      ShowSyncHudTextEx(client, data.hud, hudText, values, length);
+
+      delete params;
+    }
+  }
+}
+
+// Helper function for variable arguments HUD text
+stock void ShowSyncHudTextEx(int client, Handle sync, const char[] format, any[] params, int size)
+{
+  switch (size)
+  {
+    case 1: ShowSyncHudText(client, sync, format, params[0]);
+    case 2: ShowSyncHudText(client, sync, format, params[0], params[1]);
+    case 3: ShowSyncHudText(client, sync, format, params[0], params[1], params[2]);
+    case 4: ShowSyncHudText(client, sync, format, params[0], params[1], params[2], params[3]);
+  }
+}
+
+public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
+{
+  if (!StrContains(ability, "darkrealm_rage", false) && cfg.IsMyPlugin())
+  {
+    if (Killcount[client] >= cfg.GetInt("kill", 0))
+    {
+      int slotNum = cfg.GetInt("doslot", -2);
+      if (slotNum != -2)
+      {
+        // then trigger the slot
+        FF2R_DoBossSlot(client, slotNum);
+      }
+    }
+  }
 }
 
 public Action Event_OnPlayerDeath(Handle event, const char[] name, bool dontBroadcast)
@@ -283,44 +379,6 @@ public Action Event_OnPlayerDeath(Handle event, const char[] name, bool dontBroa
   }
 
   return Plugin_Continue;
-}
-
-public void DarkRealmMultiplier_Prethink(int client)
-{
-  if (!IsValidClient(client, false) || !IsPlayerAlive(client))
-    return;
-
-  MultiplierData data;
-  g_MultiplierData[client].GetArray(0, data);
-
-  if (data.hud != INVALID_HANDLE)
-  {
-    // Update the HUD with the current kill count and damage multipliers
-    float meleeMultiplier     = SafeCalculateMultiplier(data.meleeMultiplier, Killcount[client], data.meleeKills);
-    float secondaryMultiplier = SafeCalculateMultiplier(data.secondaryMultiplier, Killcount[client], data.secondaryKills);
-    float primaryMultiplier   = SafeCalculateMultiplier(data.primaryMultiplier, Killcount[client], data.primaryKills);
-
-    SetHudTextParams(-1.0, 0.73, 0.15, 255, 255, 255, 255, 0, 0.0, 0.0, 0.0);
-    ShowSyncHudText(client, data.hud, "Kills: %i | Melee DMG x %.2f | Secondary DMG x %.2f | Primary DMG x %.2f",
-                    Killcount[client],
-                    meleeMultiplier, secondaryMultiplier, primaryMultiplier);
-  }
-}
-
-public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
-{
-  if (!StrContains(ability, "darkrealm_rage", false) && cfg.IsMyPlugin())
-  {
-    if (Killcount[client] >= cfg.GetInt("kill", 0))
-    {
-      int slotNum = cfg.GetInt("doslot", -2);
-      if (slotNum != -2)
-      {
-        // then trigger the slot
-        FF2R_DoBossSlot(client, slotNum);
-      }
-    }
-  }
 }
 
 public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3])

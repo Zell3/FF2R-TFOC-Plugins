@@ -54,13 +54,13 @@
   }
 */
 
-#include <tf2>
 #include <sourcemod>
-#include <cfgmap>
-#include <ff2r>
-#include <sdkhooks>
 #include <sdktools>
+#include <sdkhooks>
+#include <cfgmap>
+#include <tf2>
 #include <tf2_stocks>
+#include <ff2r>
 
 #pragma semicolon 1
 #pragma newdecls required
@@ -93,17 +93,20 @@ enum struct ChargeSlotData
 }
 
 // Dynamic arrays to store slot data for each player
-ArrayList g_PassiveSlots[MAXPLAYERS + 1];
-ArrayList g_RageSlots[MAXPLAYERS + 1];
-ArrayList g_OnKillClassSlot[MAXPLAYERS + 1];
-ArrayList g_ChargeSlots[MAXPLAYERS + 1];
+ArrayList   g_PassiveSlots[MAXPLAYERS + 1];
+ArrayList   g_RageSlots[MAXPLAYERS + 1];
+ArrayList   g_OnKillClassSlot[MAXPLAYERS + 1];
+ArrayList   g_ChargeSlots[MAXPLAYERS + 1];
 
 // interval
-bool      g_HasChargeAbility[MAXPLAYERS + 1];
-float     g_OnKill_Cooldown[MAXPLAYERS + 1];
+bool        g_HasChargeAbility[MAXPLAYERS + 1];
+float       g_OnKill_Cooldown[MAXPLAYERS + 1];
 
 // HUD synchronizer handle
-Handle    g_ChargeHUD[MAXPLAYERS + 1][3];  // Support up to 3 charge slots per player
+Handle      g_ChargeHUD[MAXPLAYERS + 1][3];  // Support up to 3 charge slots per player
+
+float       g_NextHudUpdate[MAXPLAYERS + 1];
+const float HUD_UPDATE_INTERVAL = 0.1;  // Update HUD every 0.1 seconds
 
 public Plugin myinfo =
 {
@@ -319,7 +322,6 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 
   if (g_ChargeSlots[client].Length == 0)
   {
-    // No charge slots available
     g_HasChargeAbility[client] = false;
     return Plugin_Continue;
   }
@@ -327,57 +329,12 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
   ChargeSlotData data;
   float          currentTime = GetEngineTime();
 
-  // Update HUD for each charge slot
-  for (int i = g_ChargeSlots[client].Length - 1; i >= 0; i--)  // Changed to reverse loop
+  // Handle button inputs for each charge slot
+  for (int i = g_ChargeSlots[client].Length - 1; i >= 0; i--)
   {
     g_ChargeSlots[client].GetArray(i, data);
 
-    // Check if the slot has no charges left and cooldown is done
-    if (data.charges <= 0 && data.nextUse <= currentTime)
-    {
-      g_ChargeSlots[client].Erase(i);
-      continue;
-    }
-
-    // Position HUD messages vertically based on slot index
-    float yPos = 0.21 + (0.03 * i);
-
-    if (data.hudMessage[0] != '\0')
-    {
-      // Set color based on whether ability is on cooldown, not charges
-      SetHudTextParams(-1.0, yPos, 0.2,
-                       data.nextUse > currentTime ? data.cooldownColor[0] : data.hudColor[0],
-                       data.nextUse > currentTime ? data.cooldownColor[1] : data.hudColor[1],
-                       data.nextUse > currentTime ? data.cooldownColor[2] : data.hudColor[2],
-                       255, 0, 0.0, 0.0, 0.0);
-
-      // Show cooldown timer if ability is on cooldown
-      if (data.nextUse > currentTime)
-      {
-        char formattedMessage[128];
-        Format(formattedMessage, sizeof(formattedMessage), data.hudMessage, data.charges);
-        ShowSyncHudText(client, g_ChargeHUD[client][i], "%s (%.1fs)", formattedMessage, data.nextUse - currentTime);
-      }
-      else
-      {
-        // Format message based on charges remaining
-        if (data.charges > 0)
-        {
-          ShowSyncHudText(client, g_ChargeHUD[client][i], data.hudMessage, data.charges);
-        }
-        else
-        {
-          SetHudTextParams(-1.0, yPos, 0.2,
-                           data.cooldownColor[0],
-                           data.cooldownColor[1],
-                           data.cooldownColor[2],
-                           255, 0, 0.0, 0.0, 0.0);
-          ShowSyncHudText(client, g_ChargeHUD[client][i], "No Charges Left");
-        }
-      }
-    }
-
-    // Skip ability activation if on cooldown
+    // Skip if on cooldown
     if (data.nextUse > currentTime)
       continue;
 
@@ -502,4 +459,64 @@ stock bool IsValidClient(int clientIdx, bool replaycheck = true)
     return false;
 
   return true;
+}
+
+public void OnGameFrame()
+{
+  float currentTime = GetEngineTime();
+
+  for (int client = 1; client <= MaxClients; client++)
+  {
+    if (!g_HasChargeAbility[client] || !IsValidClient(client) || !IsPlayerAlive(client))
+      continue;
+
+    // Only update HUD at specified intervals
+    if (currentTime < g_NextHudUpdate[client])
+      continue;
+
+    g_NextHudUpdate[client] = currentTime + HUD_UPDATE_INTERVAL;
+
+    // Update HUD for each charge slot
+    for (int i = g_ChargeSlots[client].Length - 1; i >= 0; i--)
+    {
+      ChargeSlotData data;
+      g_ChargeSlots[client].GetArray(i, data);
+
+      // Check if the slot has no charges left and cooldown is done
+      if (data.charges <= 0 && data.nextUse <= currentTime)
+      {
+        g_ChargeSlots[client].Erase(i);
+        continue;
+      }
+
+      // Position HUD messages vertically based on slot index
+      float yPos = 0.21 + (0.03 * i);
+
+      if (data.hudMessage[0] != '\0')
+      {
+        // Only show HUD if we have charges or are on cooldown
+        if (data.charges > 0)
+        {
+          // Set color based on whether ability is on cooldown
+          SetHudTextParams(-1.0, yPos, HUD_UPDATE_INTERVAL + 0.1,
+                           data.nextUse > currentTime ? data.cooldownColor[0] : data.hudColor[0],
+                           data.nextUse > currentTime ? data.cooldownColor[1] : data.hudColor[1],
+                           data.nextUse > currentTime ? data.cooldownColor[2] : data.hudColor[2],
+                           255, 0, 0.0, 0.0, 0.0);
+
+          // Show cooldown timer if ability is on cooldown
+          if (data.nextUse > currentTime && data.charges > 0)
+          {
+            char formattedMessage[128];
+            Format(formattedMessage, sizeof(formattedMessage), data.hudMessage, data.charges);
+            ShowSyncHudText(client, g_ChargeHUD[client][i], "%s (%.1fs)", formattedMessage, data.nextUse - currentTime);
+          }
+          else if (data.charges > 0)
+          {
+            ShowSyncHudText(client, g_ChargeHUD[client][i], data.hudMessage, data.charges);
+          }
+        }
+      }
+    }
+  }
 }
