@@ -135,9 +135,8 @@ public void ClearMonochrome(int client)
   if (g_SDKCallOverlay == null)
     return;
 
+  // clear VScript overlay material
   SDKCall(g_SDKCallOverlay, client, "");
-  // clear VScript
-	
 }
 
 stock bool TargetType(int client, int target, int type)
@@ -146,15 +145,11 @@ stock bool TargetType(int client, int target, int type)
   {
     case 1:  // if target is boss
     {
-      if (client == target)
-        return true;
-      else return false;
+      return (client == target)
     }
     case 2:  // if target's team is not same team as boss's team
     {
-      if (GetClientTeam(client) != GetClientTeam(target))
-        return true;
-      else return false;
+      return (GetClientTeam(client) != GetClientTeam(target))
     }
     default:  // if target is everyone
     {
