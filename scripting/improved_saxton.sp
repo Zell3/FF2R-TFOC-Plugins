@@ -15,11 +15,11 @@ native FF2_GetBossMax(index=0); // hidden in ff2...
 #tryinclude <goomba>
 #define REQUIRE_PLUGIN
 
-/**
+/*
  * Rages for sarysa's improved version of Saxton Hale
  *
  * Replaced that stupid stun rage with actual physical fighting moves, which is far more appropriate for Saxton.
- */
+*/
 
 // copied from tf2 sdk
 // effects, for m_fEffects
@@ -123,8 +123,8 @@ new bool:PluginActiveThisRound = false;
 
 public Plugin:myinfo = {
 	name = "Freak Fortress 2: Improved Saxton",
-	author = "sarysa, Zell",
-	version = "1.0.7",
+	author = "sarysa",
+	version = "1.0.8",
 }
 
 #define FAR_FUTURE 100000000.0
@@ -141,7 +141,6 @@ public Plugin:myinfo = {
  * Saxton Lunge
  */
 #define SL_STRING "saxton_lunge"
-#define SL_ANIM_COND TFCond:100
 #define SL_VERIFICATION_INTERVAL 0.05
 #define SL_SOLIDIFY_INTERVAL 0.05
 new bool:SL_ActiveThisRound;
@@ -175,13 +174,15 @@ new String:SL_CooldownError[MAX_CENTER_TEXT_LENGTH]; // arg16
 new String:SL_NotEnoughRageError[MAX_CENTER_TEXT_LENGTH]; // arg17
 new String:SL_InWaterError[MAX_CENTER_TEXT_LENGTH]; // arg18
 new String:SL_WeighdownError[MAX_CENTER_TEXT_LENGTH]; // arg19
- 
+
+new TFCond:SL_ANIM_COND[MAXPLAYERS + 1]; // arg20, what condition to apply to the player when they lunge
+
 /**
  * Saxton Slam
  */
 #define SS_STRING "saxton_slam"
 #define SS_JUMP_FORCE 800.0
-#define SS_SAXTON_MODEL "models/player/saxton_hale_jungle_inferno/saxton_hale.mdl"
+
 //hammer_impact_button was rejected by Chdata for the below
 #define SS_EFFECT_GROUNDPOUND1 "hammer_impact_button_dust2"
 #define SS_EFFECT_GROUNDPOUND2 "hammer_impact_button_ring"
@@ -197,9 +198,9 @@ new bool:SS_WasFirstPerson[MAXPLAYERS + 1]; // internal
 new SS_DesiredKey[MAXPLAYERS + 1]; // based on arg1
 new Float:SS_Cooldown[MAXPLAYERS + 1]; // arg2
 new Float:SS_RageCost[MAXPLAYERS + 1]; // arg3
-// new SS_ForcedTaunt[MAXPLAYERS + 1]; // arg4
+new String:SS_ForcedTaunt[MAXPLAYERS + 1][MAX_MODEL_FILE_LENGTH]; // arg4
 new Float:SS_PropDelay[MAXPLAYERS + 1]; // arg5
-new String:SS_PropModel[MAX_MODEL_FILE_LENGTH]; // arg6
+new String:SS_PropModel[MAXPLAYERS + 1][MAX_MODEL_FILE_LENGTH]; // arg6
 new Float:SS_GravityDelay[MAXPLAYERS + 1]; // arg7
 new Float:SS_GravitySetting[MAXPLAYERS + 1]; // arg8
 new Float:SS_MaxDamage[MAXPLAYERS + 1]; // arg9
@@ -371,7 +372,7 @@ public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroad
 			SL_CollisionDistance[clientIdx] = FF2_GetAbilityArgumentFloat(bossIdx, this_plugin_name, SL_STRING, 8);
 			SL_CollisionHeight[clientIdx] = FF2_GetAbilityArgumentFloat(bossIdx, this_plugin_name, SL_STRING, 9);
 			SL_CollisionRadius[clientIdx] = FF2_GetAbilityArgumentFloat(bossIdx, this_plugin_name, SL_STRING, 10);
-			Saxton_ReadSounds(bossIdx, SL_STRING, 11);
+			Saxton_ReadSounds(bossIdx, SL_STRING, 11, clientIdx);
 			ReadSound(bossIdx, SL_STRING, 12, SL_HitSound);
 			FF2_GetAbilityArgumentString(bossIdx, this_plugin_name, SL_STRING, 13, SL_HitEffect, MAX_EFFECT_NAME_LENGTH);
 			new bool:pcSuccess = ReadFloatRange(bossIdx, SL_STRING, 14, SS_PitchConstraint[clientIdx]);
@@ -379,7 +380,7 @@ public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroad
 			ReadCenterText(bossIdx, SL_STRING, 17, SL_NotEnoughRageError);
 			ReadCenterText(bossIdx, SL_STRING, 18, SL_InWaterError);
 			ReadCenterText(bossIdx, SL_STRING, 19, SL_WeighdownError);
-
+			SL_ANIM_COND[clientIdx] = TFCond:FF2_GetAbilityArgument(bossIdx, this_plugin_name, SL_STRING, 20, 83);
 			// initialize key state
 			SL_KeyDown[clientIdx] = (GetClientButtons(clientIdx) & SL_DesiredKey[clientIdx]) != 0;
 			
@@ -403,14 +404,12 @@ public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroad
 			SS_DesiredKey[clientIdx] = Saxton_GetKey(bossIdx, SS_STRING, 1);
 			SS_Cooldown[clientIdx] = FF2_GetAbilityArgumentFloat(bossIdx, this_plugin_name, SS_STRING, 2);
 			SS_RageCost[clientIdx] = FF2_GetAbilityArgumentFloat(bossIdx, this_plugin_name, SS_STRING, 3);
-			//SS_ForcedTaunt[clientIdx] = FF2_GetAbilityArgument(bossIdx, this_plugin_name, SS_STRING, 4);
-			SS_PropDelay[clientIdx] = FF2_GetAbilityArgumentFloat(bossIdx, this_plugin_name, SS_STRING, 5);
-			// ReadModel(bossIdx, SS_STRING, 6, SS_PropModel);
+			
+			FF2_GetAbilityArgumentString(bossIdx, this_plugin_name, SS_STRING, 4, SS_ForcedTaunt[clientIdx], MAX_MODEL_FILE_LENGTH);
 
-			FF2_GetAbilityArgumentString(bossIdx, this_plugin_name, SS_STRING, 6, SS_PropModel, MAX_MODEL_FILE_LENGTH);
-			if (SS_PropModel[0] != '\0') {
-				PrecacheModel(SS_PropModel);
-			}
+			SS_PropDelay[clientIdx] = FF2_GetAbilityArgumentFloat(bossIdx, this_plugin_name, SS_STRING, 5);
+
+			FF2_GetAbilityArgumentString(bossIdx, this_plugin_name, SS_STRING, 6, SS_PropModel[clientIdx], MAX_MODEL_FILE_LENGTH);
 			SS_GravityDelay[clientIdx] = FF2_GetAbilityArgumentFloat(bossIdx, this_plugin_name, SS_STRING, 7);
 			SS_GravitySetting[clientIdx] = FF2_GetAbilityArgumentFloat(bossIdx, this_plugin_name, SS_STRING, 8);
 			SS_MaxDamage[clientIdx] = FF2_GetAbilityArgumentFloat(bossIdx, this_plugin_name, SS_STRING, 9);
@@ -418,7 +417,7 @@ public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroad
 			SS_DamageDecayExponent[clientIdx] = FF2_GetAbilityArgumentFloat(bossIdx, this_plugin_name, SS_STRING, 11);
 			SS_BuildingDamageFactor[clientIdx] = FF2_GetAbilityArgumentFloat(bossIdx, this_plugin_name, SS_STRING, 12);
 			SS_Knockback[clientIdx] = FF2_GetAbilityArgumentFloat(bossIdx, this_plugin_name, SS_STRING, 13);
-			Saxton_ReadSounds(bossIdx, SS_STRING, 14);
+			Saxton_ReadSounds(bossIdx, SS_STRING, 14, clientIdx);
 			SS_SlamSound(bossIdx, false); // precaches it
 			ReadCenterText(bossIdx, SS_STRING, 16, SS_CooldownError);
 			ReadCenterText(bossIdx, SS_STRING, 17, SS_NotEnoughRageError);
@@ -427,11 +426,6 @@ public Action:Event_RoundStart(Handle:event, const String:name[], bool:dontBroad
 
 			// initialize key state
 			SS_KeyDown[clientIdx] = (GetClientButtons(clientIdx) & SS_DesiredKey[clientIdx]) != 0;
-			
-			if (SS_PropModel[0] != '\0')
-			{
-				SS_SaxtonEntRef[clientIdx] = CreateSaxtonProp();
-			}
 		}
 
 		if ((SB_CanUse[clientIdx] = FF2_HasAbility(bossIdx, this_plugin_name, SB_STRING)) == true)
@@ -683,32 +677,53 @@ public Saxton_PreThink(clientIdx)
 		SH_PreThink(clientIdx);
 }
 
-new String:Saxton_Sounds[MAX_RAGE_SOUNDS][MAX_SOUND_FILE_LENGTH];
-Saxton_ReadSounds(bossIdx, const String:abilityName[], argIdx)
+new String:Saxton_LungeSounds[MAXPLAYERS + 1][MAX_RAGE_SOUNDS][MAX_SOUND_FILE_LENGTH];
+new String:Saxton_SlamSounds[MAXPLAYERS + 1][MAX_RAGE_SOUNDS][MAX_SOUND_FILE_LENGTH];
+Saxton_ReadSounds(bossIdx, const String:abilityName[], argIdx, clientIdx)
 {
 	static String:readStr[(MAX_SOUND_FILE_LENGTH + 1) * MAX_RAGE_SOUNDS];
 	FF2_GetAbilityArgumentString(bossIdx, this_plugin_name, abilityName, argIdx, readStr, sizeof(readStr));
-	ExplodeString(readStr, ";", Saxton_Sounds, MAX_RAGE_SOUNDS, MAX_SOUND_FILE_LENGTH);
-	for (new i = 0; i < MAX_RAGE_SOUNDS; i++)
-		if (strlen(Saxton_Sounds[i]) > 3)
-			PrecacheSound(Saxton_Sounds[i]);
+	if (argIdx == 11) // saxton lunge
+	{
+		ExplodeString(readStr, ";", Saxton_LungeSounds[clientIdx], MAX_RAGE_SOUNDS, MAX_SOUND_FILE_LENGTH);
+		for (new i = 0; i < MAX_RAGE_SOUNDS; i++)
+			if (strlen(Saxton_LungeSounds[clientIdx][i]) > 3)
+				PrecacheSound(Saxton_LungeSounds[clientIdx][i]);
+		return;
+	}
+	else if (argIdx == 14) // saxton slam
+	{
+		ExplodeString(readStr, ";", Saxton_SlamSounds[clientIdx], MAX_RAGE_SOUNDS, MAX_SOUND_FILE_LENGTH);
+		for (new i = 0; i < MAX_RAGE_SOUNDS; i++)
+			if (strlen(Saxton_SlamSounds[clientIdx][i]) > 3)
+				PrecacheSound(Saxton_SlamSounds[clientIdx][i]);
+		return;
+	}
 }
 
-Saxton_RandomSound()
+Saxton_RandomSound(clientIdx, argIdx)
 {
 	new count = 0;
 	for (new i = 0; i < MAX_RAGE_SOUNDS; i++)
-		if (strlen(Saxton_Sounds[i]) > 3)
-			count++;
-			
-	if (count == 0)
-		return;
-		
-	new rand = GetRandomInt(0, count-1);
-	if (strlen(Saxton_Sounds[rand]) > 3)
 	{
-		EmitSoundToAll(Saxton_Sounds[rand]);
-		EmitSoundToAll(Saxton_Sounds[rand]);
+		if (argIdx == 11 && strlen(Saxton_LungeSounds[clientIdx][i]) > 3)
+		{
+			count++;
+		}
+		else if (argIdx == 14 && strlen(Saxton_SlamSounds[clientIdx][i]) > 3)
+		{
+			count++;
+		}
+	}
+
+	// then random sound
+	if (count > 0)
+	{
+		new soundIdx = GetRandomInt(0, count - 1);
+		if (argIdx == 11 && strlen(Saxton_LungeSounds[clientIdx][soundIdx]) > 3)
+			EmitSoundToAll(Saxton_LungeSounds[clientIdx][soundIdx]);
+		else if (argIdx == 14 && strlen(Saxton_SlamSounds[clientIdx][soundIdx]) > 3)
+			EmitSoundToAll(Saxton_SlamSounds[clientIdx][soundIdx]);
 	}
 }
 
@@ -916,8 +931,8 @@ public SL_Initiate(clientIdx, Float:curTime)
 	FF2_SetBossCharge(bossIdx, 0, FF2_GetBossCharge(bossIdx, 0) - SL_RageCost[clientIdx]);
 
 	// rage sound and initializations
-	Saxton_ReadSounds(bossIdx, SL_STRING, 11);
-	Saxton_RandomSound();
+	Saxton_ReadSounds(bossIdx, SL_STRING, 11, clientIdx);
+	Saxton_RandomSound(clientIdx, 11);
 	SL_OnCooldownUntil[clientIdx] = curTime + SL_Cooldown[clientIdx];
 	SL_NextPushAt[clientIdx] = curTime + SL_VERIFICATION_INTERVAL;
 	SL_GraceEndsAt[clientIdx] = curTime + 0.1; // grace for still being on the ground, without this the rage ends immediately
@@ -932,7 +947,7 @@ public SL_Initiate(clientIdx, Float:curTime)
 	}
 
 	// add condition 81 and megaheal
-	TF2_AddCondition(clientIdx, SL_ANIM_COND, 1.2);
+	TF2_AddCondition(clientIdx, SL_ANIM_COND[clientIdx], 1.2);
 	TF2_AddCondition(clientIdx, TFCond_MegaHeal, 1.2);
 	Saxton_AddConditions(clientIdx, SAO_LungeConditions[clientIdx]);
 
@@ -1016,8 +1031,8 @@ public SL_PreThink(clientIdx)
 		if (curTime >= SL_ForceRageEndAt[clientIdx] || (curTime >= SL_GraceEndsAt[clientIdx] && ((GetEntityFlags(clientIdx) & FL_ONGROUND) != 0) || IsFullyInWater(clientIdx)))
 		{
 			SL_IsUsing[clientIdx] = false;
-			if (TF2_IsPlayerInCondition(clientIdx, SL_ANIM_COND))
-				TF2_RemoveCondition(clientIdx, SL_ANIM_COND);
+			if (TF2_IsPlayerInCondition(clientIdx, SL_ANIM_COND[clientIdx]))
+				TF2_RemoveCondition(clientIdx, SL_ANIM_COND[clientIdx]);
 			if (TF2_IsPlayerInCondition(clientIdx, TFCond_MegaHeal))
 				TF2_RemoveCondition(clientIdx, TFCond_MegaHeal);
 			Saxton_RemoveConditions(clientIdx, SAO_LungeConditions[clientIdx]);
@@ -1272,8 +1287,8 @@ public SS_Initiate(clientIdx, Float:curTime)
 	SetEntProp(clientIdx, Prop_Send, "m_iFOV", GetEntProp(clientIdx, Prop_Send, "m_iDefaultFOV"));
 	SetEntPropFloat(clientIdx, Prop_Send, "m_flFOVTime", 0.0);
 	
-	Saxton_ReadSounds(bossIdx, SS_STRING, 14);
-	Saxton_RandomSound();
+	Saxton_ReadSounds(bossIdx, SS_STRING, 14, clientIdx);
+	Saxton_RandomSound(clientIdx, 14);
 	SS_TauntingUntil[clientIdx] = curTime + SS_PropDelay[clientIdx];
 	SS_NoSlamUntil[clientIdx] = SS_TauntingUntil[clientIdx] + 0.2;
 	SS_PreparingUntil[clientIdx] = curTime + SS_GravityDelay[clientIdx];
@@ -1291,32 +1306,20 @@ public SS_Initiate(clientIdx, Float:curTime)
 	SetVariantInt(1);
 	AcceptEntityInput(clientIdx, "SetForcedTauntCam");
 
-	if(SS_PropModel[0] != '\0')
+	if(SS_PropModel[clientIdx][0] != '\0')
 	{
 			
 		SetEntityRenderMode(clientIdx, RENDER_TRANSCOLOR);
 		SetEntityRenderColor(clientIdx, 255, 255, 255, 0);
 		// force the taunt. if the prop is good, this'll work.
+
+		PrecacheModel(SS_PropModel[clientIdx]);
+		SS_SaxtonEntRef[clientIdx] = CreateSaxtonProp(clientIdx);
+
 		if(IsValidEntity(SS_SaxtonEntRef[clientIdx]))
 		{
-			if (StrEqual(SS_PropModel, SS_SAXTON_MODEL)) {
-				SetVariantString("melee_allclass_fall_stomp");
-				AcceptEntityInput(EntRefToEntIndex(SS_SaxtonEntRef[clientIdx]), "SetAnimation");
-			} else {
-				if (IsWeaponSlotActive(clientIdx, 0)) {
-					SetVariantString("airwalk_PRIMARY");
-					AcceptEntityInput(EntRefToEntIndex(SS_SaxtonEntRef[clientIdx]), "SetAnimation");
-				} else if (IsWeaponSlotActive(clientIdx, 1)) {
-					SetVariantString("airwalk_SECONDARY");
-					AcceptEntityInput(EntRefToEntIndex(SS_SaxtonEntRef[clientIdx]), "SetAnimation");
-				} else if (IsWeaponSlotActive(clientIdx, 2)) {
-					SetVariantString("airwalk_MELEE");
-					AcceptEntityInput(EntRefToEntIndex(SS_SaxtonEntRef[clientIdx]), "SetAnimation");
-				} else {
-					SetVariantString("stand_MELEE");
-					AcceptEntityInput(EntRefToEntIndex(SS_SaxtonEntRef[clientIdx]), "SetAnimation");
-				}
-			}
+			SetVariantString(SS_ForcedTaunt[clientIdx]);
+			AcceptEntityInput(EntRefToEntIndex(SS_SaxtonEntRef[clientIdx]), "SetAnimation");
 		}
 	}
 
@@ -2304,12 +2307,12 @@ stock bool:IsTreadingWater(clientIdx)
 	return (GetEntityFlags(clientIdx) & FL_ONGROUND) == 0 && GetEntProp(clientIdx, Prop_Send, "m_nWaterLevel") == 1;
 }
 
-stock CreateSaxtonProp()
+stock CreateSaxtonProp(clientIdx)
 {
 		new iSaxton = CreateEntityByName("prop_dynamic");
 		if(IsValidEntity(iSaxton))
 		{
-			DispatchKeyValue(iSaxton, "model", SS_PropModel);
+			DispatchKeyValue(iSaxton, "model", SS_PropModel[clientIdx]);
 			DispatchSpawn(iSaxton);
 
 			TeleportEntity(iSaxton, OFF_THE_MAP, NULL_VECTOR, NULL_VECTOR);
