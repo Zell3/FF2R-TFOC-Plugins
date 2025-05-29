@@ -145,11 +145,11 @@ stock bool TargetType(int client, int target, int type)
   {
     case 1:  // if target is boss
     {
-      return (client == target)
+      return (client == target);
     }
     case 2:  // if target's team is not same team as boss's team
     {
-      return (GetClientTeam(client) != GetClientTeam(target))
+      return (GetClientTeam(client) != GetClientTeam(target));
     }
     default:  // if target is everyone
     {
