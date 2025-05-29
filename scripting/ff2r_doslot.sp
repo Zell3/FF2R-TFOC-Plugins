@@ -109,8 +109,8 @@ const float HUD_UPDATE_INTERVAL = 0.1;  // Update HUD every 0.1 seconds
 public Plugin myinfo =
 {
   name        = "[FF2R] Do Slot",
-  author      = "Zell Copy Batfox code like a pro",
-  description = "Do ability slot and have it delay",
+  author      = "Zell",
+  description = "triggers a slot ability after a delay or on kill for a specific class",
   version     = "1.1.0",
   url         = ""
 };
