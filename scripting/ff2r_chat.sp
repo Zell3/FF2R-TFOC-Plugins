@@ -13,7 +13,7 @@
   {
     "slot"         "0"                             // Ability Slot
     "message"		"I am Gay!" // Message to be printed
-    "params"    "-1.0, 0.25, 3.0, 0, 255, 127, 255, 1"  // if you know how to cook this just use it, if not just leave it as is or remove this line (also beware about the commas)
+    "params"    "-1.0, 0.25, 3.0, 255, 255, 255, 255, 1"  // if you know how to cook this just use it, if not just leave it as is or remove this line (also beware about the commas)
     "target" "3" // 0: Everyone, 1: Only Self, 2:Team, 3: Enemy Team, 4: Everyone besides self
     "plugin_name"  "ff2r_chat"        // this subplugin name
   }
@@ -75,7 +75,7 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
     if (message[0] == '\0')
       return;
     char params[64];
-    cfg.GetString("params", params, sizeof(params), "-1.0, 0.25, 3.0, 0, 255, 255, 255, 1");
+    cfg.GetString("params", params, sizeof(params), "-1.0, 0.25, 3.0, 255, 255, 255, 255, 1");
     char  buffer[8][8];
     int   count = ExplodeString(params, ", ", buffer, sizeof(buffer), 8);
     float position[3];
