@@ -33,7 +33,7 @@ bool Zafkiel = false;
 public Plugin myinfo = 
 {
 	name = "Corrupt By Bernkastel : Zafukieru - Time Emperor",
-	author = "Saiaku no Seirei",
+	author = "Saiaku no Seirei (J0BLESS) Rewrite by Zell",
 	description = "Erohimu - Spirit Dress of God's Authority, Number 3",
 	version = "0.0.0",
 };
