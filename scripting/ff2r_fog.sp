@@ -1,4 +1,10 @@
 /*
+* Freak Fortress 2 Rewrite: Fog Effects
+* you can use something like fx and then rage on lose life because i made it always remove previous fog
+* still recommended only use one fog effect at a time
+* also remove "effect range" because it also applied to client when respawned
+* ait was useless to have range when everyone always set to 9999.0 anyway :shrug:
+
   "rage_fog_fx"		// Ability name can use suffixes
   {
     "slot"			  "0"
@@ -42,11 +48,6 @@
 
     "plugin_name"	"ff2r_fog"
   }
-*/
-
-/*
-  remove "effect range" because it also applied to client when respawned
-  also it was useless to have range when everyone always set to 9999.0 anyway
 */
 
 #include <sourcemod>
