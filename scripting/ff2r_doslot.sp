@@ -65,8 +65,6 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define INACTIVE 100000000.0
-
 // Create structures to hold slot data
 enum struct SlotData
 {
