@@ -8,22 +8,22 @@
     {
       "0"  // First condition set
       {
-        "trigger"    "24"
-        "keep"       "1"
-        "apply"      "-4"
-        "duration"   "10.0"
+        "trigger"    "24"     // trigger condition
+        "keep"       "1"      // whether to keep trigger condition after applying 1 = keep, 0 = remove
+        "apply"      "-4"     // apply condition -4 = explode, -3 = bonk stun, -2 = bleed, -1 = ignite or any condition id
+        "duration"   "3.0"    // duration of apply condition
       }
       "1"  // Second condition set
       {
-        "trigger"    "32"
-        "keep"       "0"
-        "apply"      "-1"
-        "duration"   "5.0"
+        "trigger"    "27"     // trigger condition
+        "keep"       "1"      // whether to keep trigger condition after applying 1 = keep, 0 = remove
+        "apply"      "-3"     // apply condition -4 = explode, -3 = bonk stun, -2 = bleed, -1 = ignite or any condition id
+        "duration"   "3.0"    // duration of apply condition
       }
       // Add more as needed...
     }
 
-    "plugin_name"       "ff2r_chain_conditions"
+    "plugin_name"     "ff2r_chain_conditions"
   }
 */
 
@@ -38,14 +38,11 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-#define INACTIVE       100000000.0
-#define MAX_CONDITIONS 8
-
 public Plugin myinfo =
 {
   name    = "Freak Fortress 2: Chain Conditions",
   author  = "Zell",
-  version = "1.1.0",
+  version = "1.1.1",
 };
 
 enum struct ConditionSet
@@ -57,23 +54,19 @@ enum struct ConditionSet
   float lastApplied;
 }
 
-float     g_flRageDuration[MAXPLAYERS + 1];
-ArrayList g_ConditionSets[MAXPLAYERS + 1];
+float     flRageDuration[MAXPLAYERS + 1];
+ArrayList conditionSets[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
   for (int i = 1; i <= MaxClients; i++)
-  {
-    g_ConditionSets[i] = new ArrayList(sizeof(ConditionSet));
-  }
+    conditionSets[i] = new ArrayList(sizeof(ConditionSet));
 }
 
 public void OnPluginEnd()
 {
   for (int i = 1; i <= MaxClients; i++)
-  {
-    delete g_ConditionSets[i];
-  }
+    delete conditionSets[i];
 }
 
 public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
@@ -88,16 +81,20 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 
     for (int i = 1; i <= MaxClients; i++)
     {
+      // clear previous rage duration and conditions
+      flRageDuration[i] = 0.0;
+      conditionSets[i].Clear();
+
+      // skip if client is not valid or is on the same team
       if (!IsValidLivingClient(i) || TF2_GetClientTeam(i) == TF2_GetClientTeam(client))
         continue;
 
-      g_flRageDuration[i] = GetEngineTime() + rageDuration;
-      g_ConditionSets[i].Clear();
+      // set rage duration and initialize condition sets
+      flRageDuration[i] = GetEngineTime() + rageDuration;
 
       char index[8];
       int  conditionIndex = 0;
-
-      while (conditionIndex < MAX_CONDITIONS)
+      do
       {
         IntToString(conditionIndex, index, sizeof(index));
         ConfigMap conditionConfig = conditions.GetSection(index);
@@ -106,46 +103,44 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
           break;
 
         ConditionSet condition;
-        int          defaultVal;
-        float        defaultFloat;
+        int          value;
+        float        duration;
 
-        conditionConfig.GetInt("trigger", defaultVal);
-        condition.trigger = defaultVal;
+        conditionConfig.GetInt("trigger", value);
+        condition.trigger = value;
 
-        conditionConfig.GetInt("keep", defaultVal);
-        condition.keep = defaultVal;
+        conditionConfig.GetInt("keep", value);
+        condition.keep = value;
 
-        conditionConfig.GetInt("apply", defaultVal);
-        condition.apply = defaultVal;
+        conditionConfig.GetInt("apply", value);
+        condition.apply = value;
 
-        conditionConfig.GetFloat("duration", defaultFloat);
-        condition.duration    = defaultFloat;
+        conditionConfig.GetFloat("duration", duration);
+        condition.duration    = duration;
         condition.lastApplied = 0.0;
 
         if (condition.trigger >= 0 && condition.apply >= -4)
-        {
-          g_ConditionSets[i].PushArray(condition);
-        }
+          conditionSets[i].PushArray(condition);
 
         conditionIndex++;
       }
+      while (conditionIndex);
 
-      if (g_ConditionSets[i].Length > 0)
-      {
+      if (conditionSets[i].Length > 0)
         SDKHook(i, SDKHook_PreThink, ChainPreThink);
-      }
     }
   }
 }
 
 public void FF2R_OnBossRemoved(int client)
 {
+  // clear rage duration and conditions when the boss is removed
   for (int i = 1; i <= MaxClients; i++)
   {
-    if (IsValidLivingClient(i) && g_flRageDuration[i] != INACTIVE)
+    if (flRageDuration[i] > 0.0)
     {
-      g_flRageDuration[i] = INACTIVE;
-      g_ConditionSets[i].Clear();
+      flRageDuration[i] = 0.0;
+      conditionSets[i].Clear();
       SDKUnhook(i, SDKHook_PreThink, ChainPreThink);
     }
   }
@@ -153,10 +148,10 @@ public void FF2R_OnBossRemoved(int client)
 
 public void ChainPreThink(int client)
 {
-  if (GetEngineTime() > g_flRageDuration[client] || g_flRageDuration[client] == INACTIVE)
+  if (GetEngineTime() > flRageDuration[client])
   {
-    g_flRageDuration[client] = INACTIVE;
-    g_ConditionSets[client].Clear();
+    flRageDuration[client] = 0.0;
+    conditionSets[client].Clear();
     SDKUnhook(client, SDKHook_PreThink, ChainPreThink);
     return;
   }
@@ -164,13 +159,13 @@ public void ChainPreThink(int client)
   if (!IsValidLivingClient(client))
     return;
 
-  int size = g_ConditionSets[client].Length;
+  int size = conditionSets[client].Length;
   for (int i = 0; i < size; i++)
   {
     ConditionSet condition;
-    g_ConditionSets[client].GetArray(i, condition);
+    conditionSets[client].GetArray(i, condition);
 
-    if (TF2_IsPlayerInCondition(client, condition.trigger) && GetEngineTime() >= condition.lastApplied)
+    if (TF2_IsPlayerInCondition(client, view_as<TFCond>(condition.trigger)) && GetEngineTime() >= condition.lastApplied)
     {
       switch (condition.apply)
       {
@@ -178,36 +173,24 @@ public void ChainPreThink(int client)
         case -2: TF2_MakeBleed(client, client, condition.duration);
         case -3: TF2_StunPlayer(client, condition.duration, 0.0, TF_STUNFLAGS_NORMALBONK);
         case -4: SDKHooks_TakeDamage(client, client, client, GetClientHealth(client) * 10.0, (DMG_ALWAYSGIB | DMG_CRIT | DMG_BLAST));
-        default: TF2_AddCondition(client, condition.apply, condition.duration);
+        default: TF2_AddCondition(client, view_as<TFCond>(condition.apply), condition.duration);
       }
 
       condition.lastApplied = GetEngineTime() + condition.duration;
-      g_ConditionSets[client].SetArray(i, condition);
+      conditionSets[client].SetArray(i, condition);
     }
 
-    if (TF2_IsPlayerInCondition(client, condition.trigger) && condition.keep == 0)
-    {
-      TF2_RemoveCondition(client, condition.trigger);
-    }
+    if (TF2_IsPlayerInCondition(client, view_as<TFCond>(condition.trigger)) && condition.keep == 0)
+      TF2_RemoveCondition(client, view_as<TFCond>(condition.trigger));
   }
 }
 
 stock bool IsValidLivingClient(int client, bool replaycheck = true)
 {
-  if (client <= 0 || client > MaxClients)
-    return false;
-
-  if (!IsClientInGame(client) || !IsClientConnected(client))
-    return false;
-
-  if (GetEntProp(client, Prop_Send, "m_bIsCoaching"))
-    return false;
-
-  if (replaycheck && (IsClientSourceTV(client) || IsClientReplay(client)))
-    return false;
-
-  if (!IsPlayerAlive(client))
-    return false;
-
+  if (client <= 0 || client > MaxClients) return false;
+  if (!IsClientInGame(client) || !IsClientConnected(client)) return false;
+  if (GetEntProp(client, Prop_Send, "m_bIsCoaching")) return false;
+  if (replaycheck && (IsClientSourceTV(client) || IsClientReplay(client))) return false;
+  if (!IsPlayerAlive(client)) return false;
   return true;
 }
