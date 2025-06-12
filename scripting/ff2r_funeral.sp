@@ -27,40 +27,45 @@ public Plugin myinfo =
 };
 
 bool bIsFuneralRound;
-bool bIsUnderOverlay[MAXPLAYERS + 1];
 int  iPlayerGlowEntity[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
+  // hook player death event
   HookEvent("player_death", Event_OnPlayerDeath, EventHookMode_PostNoCopy);
   for (int client = 1; client <= MaxClients; client++)
   {
-    if (IsClientInGame(client))
-    {
+    if (IsValidClient(client))
       SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
-    }
+    InitializeClient(client);
   }
 }
 
 public void OnPluginEnd()
 {
+  // unhook player death event
   UnhookEvent("player_death", Event_OnPlayerDeath, EventHookMode_PostNoCopy);
   for (int client = 1; client <= MaxClients; client++)
   {
-    if (IsClientInGame(client))
-    {
+    if (IsValidClient(client))
       SDKUnhook(client, SDKHook_OnTakeDamage, OnTakeDamage);
-    }
+    InitializeClient(client);
   }
 }
 
 public void OnClientPutInServer(int client)
 {
-  if (IsClientInGame(client))
-  {
+  if (IsValidClient(client))
     SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
-  }
+  InitializeClient(client);
 }
+
+public void InitializeClient(int client)
+{
+  RemoveOverlay(client);
+  iPlayerGlowEntity[client] = INVALID_ENT_REFERENCE;
+}
+
 
 public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 {
@@ -77,11 +82,8 @@ public void FF2R_OnBossRemoved(int client)
     for (int i = 1; i <= MaxClients; i++)
     {
       if (IsValidClient(i))
-      {
-        bIsUnderOverlay[i] = false;
-        RemoveOverlay(i);  // Remove the overlay from the player
         SDKUnhook(i, SDKHook_PreThink, OnPlayerThink);
-      }
+      InitializeClient(i);
     }
 
     // Remove all glow entities created by this plugin
@@ -115,7 +117,6 @@ public void TF2_OnConditionAdded(int client, TFCond condition)
       if (IsValidEntity(iGlow))
       {
         iPlayerGlowEntity[client] = EntIndexToEntRef(iGlow);
-        bIsUnderOverlay[client]   = true;
         SDKHook(client, SDKHook_PreThink, OnPlayerThink);
       }
     }
@@ -136,26 +137,23 @@ public void TF2_OnConditionRemoved(int client, TFCond condition)
   if (condition == TFCond_MarkedForDeath)
   {
     SDKUnhook(client, SDKHook_PreThink, OnPlayerThink);
-    int iGlow = EntRefToEntIndex(iPlayerGlowEntity[client]);
-    if (iGlow != INVALID_ENT_REFERENCE)
+    if (TF2_HasGlow(client))
     {
-      AcceptEntityInput(iGlow, "Kill");
-      iPlayerGlowEntity[client] = INVALID_ENT_REFERENCE;
-      bIsUnderOverlay[client]   = false;
-      RemoveOverlay(client);
+      int iGlow = EntRefToEntIndex(iPlayerGlowEntity[client]);
+      if (iGlow != INVALID_ENT_REFERENCE)
+        AcceptEntityInput(iGlow, "Kill");
     }
+
+    InitializeClient(client);
   }
 }
 
 public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype, int &weapon, float damageForce[3], float damagePosition[3])
 {
-  if (!IsValidClient(attacker) || !IsValidClient(victim))
-    return Plugin_Continue;
-
-  if (!IsPlayerAlive(attacker) || !IsPlayerAlive(victim))
-    return Plugin_Continue;
-
   if (!bIsFuneralRound)
+    return Plugin_Continue;
+
+  if (!IsValidClient(attacker) || !IsValidClient(victim) || !IsPlayerAlive(attacker) || !IsPlayerAlive(victim))
     return Plugin_Continue;
 
   if (FF2R_GetBossData(attacker).GetAbility("funeral_of_the_dead_butterfly").IsMyPlugin())
@@ -164,49 +162,42 @@ public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &dam
       if (TF2_IsPlayerInCondition(victim, TFCond_MarkedForDeath))
         FakeClientCommand(victim, "kill");
   }
+
   return Plugin_Continue;
 }
 
 public Action Event_OnPlayerDeath(Handle event, const char[] name, bool dontBroadcast)
 {
+  if (!bIsFuneralRound)
+    return Plugin_Continue;
+
   int client = GetClientOfUserId(GetEventInt(event, "userid"));
 
-  if (!IsValidClient(client))  // Check if the client is valid and alive
-    return Plugin_Continue;    // If not, do nothing
-
-  if ((GetEventInt(event, "death_flags") & TF_DEATHFLAG_DEADRINGER))
-    return Plugin_Continue;  // Prevent a bug with revive markers & dead ringer spies
-
-  if (bIsFuneralRound)
-  {
-    SDKUnhook(client, SDKHook_PreThink, OnPlayerThink);
-    if (TF2_HasGlow(client))  // Check if the client has a glow effect
-    {
-      int iGlow = EntRefToEntIndex(iPlayerGlowEntity[client]);
-      if (iGlow != INVALID_ENT_REFERENCE)
-      {
-        AcceptEntityInput(iGlow, "Kill");
-        iPlayerGlowEntity[client] = INVALID_ENT_REFERENCE;
-      }
-    }
-
-    if (bIsUnderOverlay[client])  // Check if the client is under an overlay
-    {
-      bIsUnderOverlay[client] = false;
-      RemoveOverlay(client);  // Remove the overlay from the player
-    }
-  }
-
-  return Plugin_Continue;  // Continue the event
-}
-
-public Action OnPlayerThink(int client)
-{
   if (!IsValidClient(client))
     return Plugin_Continue;
 
-  if (!bIsFuneralRound)
+  if ((GetEventInt(event, "death_flags") & TF_DEATHFLAG_DEADRINGER))
     return Plugin_Continue;
+
+  SDKUnhook(client, SDKHook_PreThink, OnPlayerThink);
+  if (TF2_HasGlow(client))
+  {
+    int iGlow = EntRefToEntIndex(iPlayerGlowEntity[client]);
+    if (iGlow != INVALID_ENT_REFERENCE)
+      AcceptEntityInput(iGlow, "Kill");
+  }
+  InitializeClient(client);
+
+  return Plugin_Continue;
+}
+
+public void OnPlayerThink(int client)
+{
+  if (!bIsFuneralRound)
+    return;
+
+  if (!IsValidClient(client))
+    return;
 
   int iGlow = EntRefToEntIndex(iPlayerGlowEntity[client]);
 
@@ -216,15 +207,9 @@ public Action OnPlayerThink(int client)
     AcceptEntityInput(iGlow, "SetGlowColor");
   }
 
-  if (bIsUnderOverlay[client])
-  {
-    CreateOverlay(client);
-  }
-
-  return Plugin_Continue;
+  CreateOverlay(client);
 }
 
-// Overlay effect
 public void CreateOverlay(int client)
 {
   if (IsValidClient(client))
@@ -288,15 +273,11 @@ stock bool IsValidClient(int client, bool replaycheck = true)
 {
   if (client <= 0 || client > MaxClients)
     return false;
-
   if (!IsClientInGame(client) || !IsClientConnected(client))
     return false;
-
   if (GetEntProp(client, Prop_Send, "m_bIsCoaching"))
     return false;
-
   if (replaycheck && (IsClientSourceTV(client) || IsClientReplay(client)))
     return false;
-
   return true;
 }
