@@ -12,20 +12,23 @@
 #include <ff2r>
 #include <tf2>
 #include <tf2_stocks>
-#include <tf2items>
 
 #pragma semicolon 1
 #pragma newdecls required
 
+#define FUNERAL_OVERLAY    "draqz/ff2/funeral/overlay"
+#define FUNERAL_GLOW_COLOR { 255, 255, 255, 255 }  // White glow color
 public Plugin myinfo =
 {
-  name   = "TFOC: Funeral of Dead Butterfly",
-  author = "Zell"
+  name        = "Funeral of Dead Butterfly Abilities",
+  author      = "Zell",
+  description = "applies screen overlay and glow on marked player, insta-kills if hit on marked player",
+  version     = "1.0.0",
 };
 
-bool isRound;
-bool isUnderOverlay[MAXPLAYERS + 1];
-int  g_iPlayerGlowEntity[MAXPLAYERS + 1];
+bool bIsFuneralRound;
+bool bIsUnderOverlay[MAXPLAYERS + 1];
+int  iPlayerGlowEntity[MAXPLAYERS + 1];
 
 public void OnPluginStart()
 {
@@ -62,57 +65,58 @@ public void OnClientPutInServer(int client)
 public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 {
   if (!setup || FF2R_GetGamemodeType() != 2)
-  {
-    AbilityData ability = cfg.GetAbility("funeral_of_the_dead_butterfly");
-    if (ability.IsMyPlugin())
-    {
-      isRound = true;
-    }
-  }
+    if (cfg.GetAbility("funeral_of_the_dead_butterfly").IsMyPlugin())
+      bIsFuneralRound = true;
 }
 
 public void FF2R_OnBossRemoved(int client)
 {
-  if (isRound)
+  if (bIsFuneralRound)
   {
-    isRound = false;
+    bIsFuneralRound = false;
     for (int i = 1; i <= MaxClients; i++)
     {
       if (IsValidClient(i))
       {
-        isUnderOverlay[i] = false;
+        bIsUnderOverlay[i] = false;
         RemoveOverlay(i);  // Remove the overlay from the player
         SDKUnhook(i, SDKHook_PreThink, OnPlayerThink);
       }
     }
+
+    // Remove all glow entities created by this plugin
     int index = -1;
     while ((index = FindEntityByClassname(index, "tf_glow")) != -1)
     {
       char strName[64];
       GetEntPropString(index, Prop_Data, "m_iName", strName, sizeof(strName));
       if (StrEqual(strName, "whiteGlow"))
-      {
         AcceptEntityInput(index, "Kill");
-      }
     }
   }
 }
 
 public void TF2_OnConditionAdded(int client, TFCond condition)
 {
-  if (IsValidClient(client) && IsPlayerAlive(client) && !FF2R_GetBossData(client) && isRound)
+  if (!bIsFuneralRound)
+    return;
+
+  if (!IsValidClient(client) || !IsPlayerAlive(client))
+    return;
+
+  if (FF2R_GetBossData(client).GetAbility("funeral_of_the_dead_butterfly").IsMyPlugin())
+    return;
+
+  if (condition == TFCond_MarkedForDeath)
   {
-    if (condition == TFCond_MarkedForDeath)
+    if (!TF2_HasGlow(client))
     {
-      if (!TF2_HasGlow(client))
+      int iGlow = TF2_CreateGlow(client);
+      if (IsValidEntity(iGlow))
       {
-        int iGlow = TF2_CreateGlow(client);
-        if (IsValidEntity(iGlow))
-        {
-          g_iPlayerGlowEntity[client] = EntIndexToEntRef(iGlow);
-          isUnderOverlay[client]      = true;
-          SDKHook(client, SDKHook_PreThink, OnPlayerThink);
-        }
+        iPlayerGlowEntity[client] = EntIndexToEntRef(iGlow);
+        bIsUnderOverlay[client]   = true;
+        SDKHook(client, SDKHook_PreThink, OnPlayerThink);
       }
     }
   }
@@ -120,19 +124,25 @@ public void TF2_OnConditionAdded(int client, TFCond condition)
 
 public void TF2_OnConditionRemoved(int client, TFCond condition)
 {
-  if (IsValidClient(client) && IsPlayerAlive(client) && !FF2R_GetBossData(client) && isRound)
+  if (!bIsFuneralRound)
+    return;
+
+  if (!IsValidClient(client) || !IsPlayerAlive(client))
+    return;
+
+  if (FF2R_GetBossData(client).GetAbility("funeral_of_the_dead_butterfly").IsMyPlugin())
+    return;
+
+  if (condition == TFCond_MarkedForDeath)
   {
-    if (condition == TFCond_MarkedForDeath)
+    SDKUnhook(client, SDKHook_PreThink, OnPlayerThink);
+    int iGlow = EntRefToEntIndex(iPlayerGlowEntity[client]);
+    if (iGlow != INVALID_ENT_REFERENCE)
     {
-      SDKUnhook(client, SDKHook_PreThink, OnPlayerThink);
-      int iGlow = EntRefToEntIndex(g_iPlayerGlowEntity[client]);
-      if (iGlow != INVALID_ENT_REFERENCE)
-      {
-        AcceptEntityInput(iGlow, "Kill");
-        g_iPlayerGlowEntity[client] = INVALID_ENT_REFERENCE;
-        isUnderOverlay[client]      = false;
-        RemoveOverlay(client);  // Remove the overlay from the player
-      }
+      AcceptEntityInput(iGlow, "Kill");
+      iPlayerGlowEntity[client] = INVALID_ENT_REFERENCE;
+      bIsUnderOverlay[client]   = false;
+      RemoveOverlay(client);
     }
   }
 }
@@ -145,16 +155,14 @@ public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &dam
   if (!IsPlayerAlive(attacker) || !IsPlayerAlive(victim))
     return Plugin_Continue;
 
+  if (!bIsFuneralRound)
+    return Plugin_Continue;
+
   if (FF2R_GetBossData(attacker).GetAbility("funeral_of_the_dead_butterfly").IsMyPlugin())
   {
-    if (isRound && attacker != victim)
-    {
-      // check if the attacker is a boss and has this condition
-      if (!FF2R_GetBossData(victim) && TF2_IsPlayerInCondition(victim, TFCond_MarkedForDeath))
-      {
-        FakeClientCommand(victim, "kill");  // kill the target
-      }
-    }
+    if (attacker != victim)
+      if (TF2_IsPlayerInCondition(victim, TFCond_MarkedForDeath))
+        FakeClientCommand(victim, "kill");
   }
   return Plugin_Continue;
 }
@@ -169,22 +177,22 @@ public Action Event_OnPlayerDeath(Handle event, const char[] name, bool dontBroa
   if ((GetEventInt(event, "death_flags") & TF_DEATHFLAG_DEADRINGER))
     return Plugin_Continue;  // Prevent a bug with revive markers & dead ringer spies
 
-  if (isRound)
+  if (bIsFuneralRound)
   {
     SDKUnhook(client, SDKHook_PreThink, OnPlayerThink);
     if (TF2_HasGlow(client))  // Check if the client has a glow effect
     {
-      int iGlow = EntRefToEntIndex(g_iPlayerGlowEntity[client]);
+      int iGlow = EntRefToEntIndex(iPlayerGlowEntity[client]);
       if (iGlow != INVALID_ENT_REFERENCE)
       {
         AcceptEntityInput(iGlow, "Kill");
-        g_iPlayerGlowEntity[client] = INVALID_ENT_REFERENCE;
+        iPlayerGlowEntity[client] = INVALID_ENT_REFERENCE;
       }
     }
 
-    if (isUnderOverlay[client])  // Check if the client is under an overlay
+    if (bIsUnderOverlay[client])  // Check if the client is under an overlay
     {
-      isUnderOverlay[client] = false;
+      bIsUnderOverlay[client] = false;
       RemoveOverlay(client);  // Remove the overlay from the player
     }
   }
@@ -197,23 +205,18 @@ public Action OnPlayerThink(int client)
   if (!IsValidClient(client))
     return Plugin_Continue;
 
-  if (!isRound)
+  if (!bIsFuneralRound)
     return Plugin_Continue;
 
-  int iGlow = EntRefToEntIndex(g_iPlayerGlowEntity[client]);
+  int iGlow = EntRefToEntIndex(iPlayerGlowEntity[client]);
 
   if (iGlow != INVALID_ENT_REFERENCE)
   {
-    int color[4];
-    color[0] = 255;
-    color[1] = 255;
-    color[2] = 255;
-    color[3] = 255;
-    SetVariantColor(color);
+    SetVariantColor(FUNERAL_GLOW_COLOR);
     AcceptEntityInput(iGlow, "SetGlowColor");
   }
 
-  if (isUnderOverlay[client])
+  if (bIsUnderOverlay[client])
   {
     CreateOverlay(client);
   }
@@ -227,7 +230,7 @@ public void CreateOverlay(int client)
   if (IsValidClient(client))
   {
     char overlay[PLATFORM_MAX_PATH];
-    Format(overlay, sizeof(overlay), "r_screenoverlay \"%s\"", "draqz/ff2/funeral/overlay");
+    Format(overlay, sizeof(overlay), "r_screenoverlay \"%s\"", FUNERAL_OVERLAY);
     SetCommandFlags("r_screenoverlay", GetCommandFlags("r_screenoverlay") & ~FCVAR_CHEAT);
     ClientCommand(client, overlay);  // Set the screen overlay for the target
     SetCommandFlags("r_screenoverlay", GetCommandFlags("r_screenoverlay") & FCVAR_CHEAT);
