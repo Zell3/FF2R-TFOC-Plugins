@@ -108,7 +108,7 @@ bool DOT_AllowWhileStunned[MAXTF2PLAYERS]; // arg15
 
 public Plugin myinfo = {
 	name = "Freak Fortress 2 Rewrite: Drain Over Time Platform",
-	author = "sarysa fix by zell",
+	author = "sarysa rewrite by zell",
 	version = "1.1.0",
 };
 
@@ -159,18 +159,6 @@ public void DOTPostRoundStartInit()
 public void OnMapStart()
 {
 	// // Make the clients download the overlays, since pretty much everyone forgot to put those in the boss' config
-	// AddFileToDownloadsTable("materials/freak_fortress_2/dots/alt_fire_overlay1.vmt");
-	// AddFileToDownloadsTable("materials/freak_fortress_2/dots/alt_fire_overlay1.vtf");
-	// AddFileToDownloadsTable("materials/freak_fortress_2/dots/alt_fire_overlay2.vmt");
-	// AddFileToDownloadsTable("materials/freak_fortress_2/dots/alt_fire_overlay2.vtf");
-	// AddFileToDownloadsTable("materials/freak_fortress_2/dots/attack3_overlay1.vmt");
-	// AddFileToDownloadsTable("materials/freak_fortress_2/dots/attack3_overlay1.vtf");
-	// AddFileToDownloadsTable("materials/freak_fortress_2/dots/attack3_overlay2.vmt");
-	// AddFileToDownloadsTable("materials/freak_fortress_2/dots/attack3_overlay2.vtf");
-	// AddFileToDownloadsTable("materials/freak_fortress_2/dots/reload_overlay1.vmt");
-	// AddFileToDownloadsTable("materials/freak_fortress_2/dots/reload_overlay1.vtf");
-	// AddFileToDownloadsTable("materials/freak_fortress_2/dots/reload_overlay2.vmt");
-	// AddFileToDownloadsTable("materials/freak_fortress_2/dots/reload_overlay2.vtf");
 	AddFileToDownloadsTable("materials/freak_fortress_2/dots/alt_fire_overlay1.vmt");
 	AddFileToDownloadsTable("materials/freak_fortress_2/dots/alt_fire_overlay1.vtf");
 	AddFileToDownloadsTable("materials/freak_fortress_2/dots/alt_fire_overlay2.vmt");
@@ -204,7 +192,7 @@ public void OnPluginStart() {
 	}
 
 	HookEvent("arena_win_panel", Event_RoundEnd, EventHookMode_PostNoCopy);
-  HookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_PostNoCopy);
+	HookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_PostNoCopy);
 }
 
 public void FF2R_OnBossCreated(int client, BossData cfg, bool setup) {
