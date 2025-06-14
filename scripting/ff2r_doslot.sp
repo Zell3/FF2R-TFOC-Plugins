@@ -42,6 +42,7 @@
 
   "rage_charge_doslot"      // Ability name can use suffixes
   {
+    // you can have charge up to 3 at the same time
     "slot"		            "0"			  // Ability Slot
     "doslot"		          "20"		  // Trigger Slot (example: 20 is ion cannon)
     "amount"		          "3"	      // Amount of charge to use
@@ -65,14 +66,13 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-// Create structures to hold slot data
 enum struct SlotData
 {
   int   slotNumber;
   float timer;
 }
 
-enum struct OnKillClassSlotData
+enum struct onKillClassSlotData
 {
   TFClassType classType;
   int         slotNumber;
@@ -90,28 +90,26 @@ enum struct ChargeSlotData
   float cooldown;
 }
 
-// Dynamic arrays to store slot data for each player
-ArrayList   g_PassiveSlots[MAXPLAYERS + 1];
-ArrayList   g_RageSlots[MAXPLAYERS + 1];
-ArrayList   g_OnKillClassSlot[MAXPLAYERS + 1];
-ArrayList   g_ChargeSlots[MAXPLAYERS + 1];
+// store slot data
+ArrayList passiveSlots[MAXPLAYERS + 1];
+ArrayList rageSlots[MAXPLAYERS + 1];
+ArrayList onKillClassSlot[MAXPLAYERS + 1];
+ArrayList chargeSlots[MAXPLAYERS + 1];
 
 // interval
-bool        g_HasChargeAbility[MAXPLAYERS + 1];
-float       g_OnKill_Cooldown[MAXPLAYERS + 1];
+bool      bHasChargeAbility[MAXPLAYERS + 1];
+float     flOnKillCooldown[MAXPLAYERS + 1];
 
-// HUD synchronizer handle
-Handle      g_ChargeHUD[MAXPLAYERS + 1][3];  // Support up to 3 charge slots per player
-
-float       g_NextHudUpdate[MAXPLAYERS + 1];
-const float HUD_UPDATE_INTERVAL = 0.1;  // Update HUD every 0.1 seconds
+// HUD
+Handle    hChargeHUD[MAXPLAYERS + 1][3];  // Support up to 3 charge slots per player
+float     flNextHud[MAXPLAYERS + 1];
 
 public Plugin myinfo =
 {
   name        = "[FF2R] Do Slot",
   author      = "Zell",
   description = "triggers a slot ability after a delay or on kill for a specific class",
-  version     = "1.1.0",
+  version     = "1.0.0",
   url         = ""
 };
 
@@ -121,19 +119,17 @@ public void OnPluginStart()
   HookEvent("arena_win_panel", Event_RoundEnd, EventHookMode_PostNoCopy);
   HookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_PostNoCopy);
 
-  // Initialize arrays for all possible players
-  for (int client = 0; client <= MAXPLAYERS; client++)
+  for (int client = 0; client <= MaxClients; client++)
   {
-    g_PassiveSlots[client]    = new ArrayList(sizeof(SlotData));
-    g_RageSlots[client]       = new ArrayList(sizeof(SlotData));
-    g_ChargeSlots[client]     = new ArrayList(sizeof(ChargeSlotData));
-    g_OnKillClassSlot[client] = new ArrayList(sizeof(OnKillClassSlotData));
-    g_OnKill_Cooldown[client] = 0.0;
+    passiveSlots[client]     = new ArrayList(sizeof(SlotData));
+    rageSlots[client]        = new ArrayList(sizeof(SlotData));
+    chargeSlots[client]      = new ArrayList(sizeof(ChargeSlotData));
+    onKillClassSlot[client]  = new ArrayList(sizeof(onKillClassSlotData));
+    flOnKillCooldown[client] = 0.0;
 
-    // Create HUD synchronizers for each slot
     for (int slot = 0; slot < 3; slot++)
     {
-      g_ChargeHUD[client][slot] = CreateHudSynchronizer();
+      hChargeHUD[client][slot] = CreateHudSynchronizer();
     }
   }
 }
@@ -145,19 +141,19 @@ public void OnPluginEnd()
   UnhookEvent("arena_win_panel", Event_RoundEnd, EventHookMode_PostNoCopy);
   UnhookEvent("teamplay_round_win", Event_RoundEnd, EventHookMode_PostNoCopy);
 
-  // Clean up arrays
+  // clean up arrays
   for (int client = 0; client <= MaxClients; client++)
   {
-    delete g_PassiveSlots[client];
-    delete g_RageSlots[client];
-    delete g_ChargeSlots[client];
-    delete g_OnKillClassSlot[client];
-    g_OnKill_Cooldown[client] = 0.0;
+    delete passiveSlots[client];
+    delete rageSlots[client];
+    delete chargeSlots[client];
+    delete onKillClassSlot[client];
+    flOnKillCooldown[client] = 0.0;
 
-    // Close HUD synchronizer handles
+    // close HUD
     for (int slot = 0; slot < 3; slot++)
     {
-      CloseHandle(g_ChargeHUD[client][slot]);
+      CloseHandle(hChargeHUD[client][slot]);
     }
   }
 }
@@ -166,14 +162,14 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 {
   if (!setup || FF2R_GetGamemodeType() != 2)
   {
-    // Clear existing data
-    g_PassiveSlots[client].Clear();
-    g_RageSlots[client].Clear();
-    g_OnKillClassSlot[client].Clear();
-    g_OnKill_Cooldown[client] = 0.0;
-    g_ChargeSlots[client].Clear();
-    g_HasChargeAbility[client] = false;
-    AbilityData ability        = cfg.GetAbility("passive_doslot");
+    passiveSlots[client].Clear();
+    rageSlots[client].Clear();
+    onKillClassSlot[client].Clear();
+    flOnKillCooldown[client] = 0.0;
+    chargeSlots[client].Clear();
+    bHasChargeAbility[client] = false;
+
+    AbilityData ability       = cfg.GetAbility("passive_doslot");
     if (ability.IsMyPlugin())
     {
       int max = ability.GetInt("max", 0);
@@ -194,7 +190,7 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
           data.slotNumber = slotNum;
           data.timer      = GetEngineTime() + delay;
 
-          g_PassiveSlots[client].PushArray(data);
+          passiveSlots[client].PushArray(data);
         }
       }
     }
@@ -211,11 +207,11 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
         int slotNum = ability.GetInt(class, -2);
         if (slotNum != -2)
         {
-          OnKillClassSlotData data;
+          onKillClassSlotData data;
           data.classType  = view_as<TFClassType>(i);
           data.slotNumber = slotNum;
 
-          g_OnKillClassSlot[client].PushArray(data);
+          onKillClassSlot[client].PushArray(data);
         }
       }
     }
@@ -229,12 +225,13 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
   {
     if (FF2R_GetBossData(client))
     {
-      g_PassiveSlots[client].Clear();
-      g_RageSlots[client].Clear();
-      g_ChargeSlots[client].Clear();
-      g_OnKillClassSlot[client].Clear();
-      g_OnKill_Cooldown[client]  = 0.0;
-      g_HasChargeAbility[client] = false;
+      passiveSlots[client].Clear();
+      rageSlots[client].Clear();
+      onKillClassSlot[client].Clear();
+      flOnKillCooldown[client] = 0.0;
+      chargeSlots[client].Clear();
+      bHasChargeAbility[client] = false;
+      
       SDKUnhook(client, SDKHook_PreThink, DoSlot_Prethink);
       break;
     }
@@ -252,10 +249,15 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
     data.slotNumber = cfg.GetInt("doslot", 0);
     data.timer      = GetEngineTime() + cfg.GetFloat("delay", 0.0);
 
-    g_RageSlots[client].PushArray(data);
+    rageSlots[client].PushArray(data);
   }
+
   else if (!StrContains(ability, "rage_charge_doslot", false))
   {
+    // prevent adding more than 5 charge slots
+    if (chargeSlots[client].Length >= 3)
+      return;
+
     ChargeSlotData data;
     data.charges    = cfg.GetInt("amount", 3);
     data.slotNumber = cfg.GetInt("doslot", 20);
@@ -272,8 +274,8 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
     cfg.GetString("hud_cooldown_color", colorStr, sizeof(colorStr), "255 0 0");
     ParseColorString(colorStr, data.cooldownColor);
 
-    g_ChargeSlots[client].PushArray(data);
-    g_HasChargeAbility[client] = true;
+    chargeSlots[client].PushArray(data);
+    bHasChargeAbility[client] = true;
   }
 }
 
@@ -284,59 +286,58 @@ public void DoSlot_Prethink(int client)
 
 public void DoSlot(int client, float gameTime)
 {
-  // Handle passive slots
-  int passiveCount = g_PassiveSlots[client].Length;
+  // this is for passive
+  int passiveCount = passiveSlots[client].Length;
   for (int i = passiveCount - 1; i >= 0; i--)
   {
     SlotData data;
-    g_PassiveSlots[client].GetArray(i, data);
+    passiveSlots[client].GetArray(i, data);
 
     if (data.timer <= gameTime)
     {
       FF2R_DoBossSlot(client, data.slotNumber, data.slotNumber);
-      g_PassiveSlots[client].Erase(i);
+      passiveSlots[client].Erase(i);
     }
   }
 
-  // Handle rage slots
-  int rageCount = g_RageSlots[client].Length;
+  // this is for rage
+  int rageCount = rageSlots[client].Length;
   for (int i = rageCount - 1; i >= 0; i--)
   {
     SlotData data;
-    g_RageSlots[client].GetArray(i, data);
+    rageSlots[client].GetArray(i, data);
 
     if (data.timer <= gameTime)
     {
       FF2R_DoBossSlot(client, data.slotNumber, data.slotNumber);
-      g_RageSlots[client].Erase(i);
+      rageSlots[client].Erase(i);
     }
   }
 }
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3], int &weapon)
 {
-  if (!g_HasChargeAbility[client] || !IsValidClient(client) || !IsPlayerAlive(client))
+  if (!bHasChargeAbility[client] || !IsValidClient(client) || !IsPlayerAlive(client))
     return Plugin_Continue;
 
-  if (g_ChargeSlots[client].Length == 0)
+  if (chargeSlots[client].Length == 0)
   {
-    g_HasChargeAbility[client] = false;
+    bHasChargeAbility[client] = false;
     return Plugin_Continue;
   }
 
   ChargeSlotData data;
   float          currentTime = GetEngineTime();
 
-  // Handle button inputs for each charge slot
-  for (int i = g_ChargeSlots[client].Length - 1; i >= 0; i--)
+  for (int i = chargeSlots[client].Length - 1; i >= 0; i--)
   {
-    g_ChargeSlots[client].GetArray(i, data);
+    chargeSlots[client].GetArray(i, data);
 
-    // Skip if on cooldown
+    // skip if on cooldown
     if (data.nextUse > currentTime)
       continue;
 
-    // Check button press based on button mode
+    // check button press based on button mode
     bool buttonPressed = false;
     switch (data.buttonMode)
     {
@@ -353,7 +354,7 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
       // Update charges and cooldown
       data.charges--;
       data.nextUse = currentTime + data.cooldown;
-      g_ChargeSlots[client].SetArray(i, data);
+      chargeSlots[client].SetArray(i, data);
     }
   }
 
@@ -382,18 +383,18 @@ public Action Event_PlayerDeath(Handle event, const char[] name, bool dontBroadc
   if (!ability.IsMyPlugin())
     return Plugin_Continue;
 
-  // then we need to check if the kill class equal to the one in the on kill class data
-  int length = g_OnKillClassSlot[attacker].Length;
+  // check if the kill class equal to the one in the on kill class data
+  int length = onKillClassSlot[attacker].Length;
   for (int i = length - 1; i >= 0; i--)
   {
-    OnKillClassSlotData data;
-    g_OnKillClassSlot[attacker].GetArray(i, data);
+    onKillClassSlotData data;
+    onKillClassSlot[attacker].GetArray(i, data);
     if (data.classType == TF2_GetPlayerClass(victim))
     {
-      // Set the cooldown to the current time + the cooldown value
-      if (GetEngineTime() > g_OnKill_Cooldown[attacker])
+      // cooldown to the current time + the cooldown value
+      if (GetEngineTime() > flOnKillCooldown[attacker])
       {
-        g_OnKill_Cooldown[attacker] = GetEngineTime() + boss.GetAbility("kill_class_doslot").GetFloat("cooldown", 0.0);
+        flOnKillCooldown[attacker] = GetEngineTime() + boss.GetAbility("kill_class_doslot").GetFloat("cooldown", 0.0);
         // then trigger the slot
         FF2R_DoBossSlot(attacker, data.slotNumber);
       }
@@ -414,7 +415,6 @@ stock void ParseColorString(const char[] colorStr, int color[3])
   }
 }
 
-// Change the function to use a char array parameter instead of returning a string directly
 stock void GetClassStringByIndex(int index, char[] buffer, int maxlen)
 {
   switch (index)
@@ -461,57 +461,53 @@ stock bool IsValidClient(int clientIdx, bool replaycheck = true)
 
 public void OnGameFrame()
 {
-  float currentTime = GetEngineTime();
-
   for (int client = 1; client <= MaxClients; client++)
   {
-    if (!g_HasChargeAbility[client] || !IsValidClient(client) || !IsPlayerAlive(client))
+    if (!bHasChargeAbility[client] || !IsValidClient(client) || !IsPlayerAlive(client))
       continue;
 
-    // Only update HUD at specified intervals
-    if (currentTime < g_NextHudUpdate[client])
+    float currentTime = GetEngineTime();
+
+    if (currentTime < flNextHud[client])
       continue;
 
-    g_NextHudUpdate[client] = currentTime + HUD_UPDATE_INTERVAL;
+    flNextHud[client] = currentTime + 0.1;
 
-    // Update HUD for each charge slot
-    for (int i = g_ChargeSlots[client].Length - 1; i >= 0; i--)
+    for (int i = chargeSlots[client].Length - 1; i >= 0; i--)
     {
       ChargeSlotData data;
-      g_ChargeSlots[client].GetArray(i, data);
+      chargeSlots[client].GetArray(i, data);
 
-      // Check if the slot has no charges left and cooldown is done
       if (data.charges <= 0 && data.nextUse <= currentTime)
       {
-        g_ChargeSlots[client].Erase(i);
+        chargeSlots[client].Erase(i);
         continue;
       }
 
-      // Position HUD messages vertically based on slot index
       float yPos = 0.21 + (0.03 * i);
 
       if (data.hudMessage[0] != '\0')
       {
-        // Only show HUD if we have charges or are on cooldown
+        // only show HUD if we have charges or are on cooldown
         if (data.charges > 0)
         {
-          // Set color based on whether ability is on cooldown
-          SetHudTextParams(-1.0, yPos, HUD_UPDATE_INTERVAL + 0.1,
+          // set color based on whether ability is on cooldown
+          SetHudTextParams(-1.0, yPos, 0.2,
                            data.nextUse > currentTime ? data.cooldownColor[0] : data.hudColor[0],
                            data.nextUse > currentTime ? data.cooldownColor[1] : data.hudColor[1],
                            data.nextUse > currentTime ? data.cooldownColor[2] : data.hudColor[2],
                            255, 0, 0.0, 0.0, 0.0);
 
-          // Show cooldown timer if ability is on cooldown
+          // show cooldown timer if ability is on cooldown
           if (data.nextUse > currentTime && data.charges > 0)
           {
             char formattedMessage[128];
             Format(formattedMessage, sizeof(formattedMessage), data.hudMessage, data.charges);
-            ShowSyncHudText(client, g_ChargeHUD[client][i], "%s (%.1fs)", formattedMessage, data.nextUse - currentTime);
+            ShowSyncHudText(client, hChargeHUD[client][i], "%s (%.1fs)", formattedMessage, data.nextUse - currentTime);
           }
           else if (data.charges > 0)
           {
-            ShowSyncHudText(client, g_ChargeHUD[client][i], data.hudMessage, data.charges);
+            ShowSyncHudText(client, hChargeHUD[client][i], data.hudMessage, data.charges);
           }
         }
       }
