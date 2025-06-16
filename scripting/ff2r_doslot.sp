@@ -42,15 +42,18 @@
 
   "rage_charge_doslot"      // Ability name can use suffixes
   {
-    // you can have charge up to 3 at the same time
     "slot"		            "0"			  // Ability Slot
+
     "doslot"		          "20"		  // Trigger Slot (example: 20 is ion cannon)
     "amount"		          "3"	      // Amount of charge to use
-    "cooldown"		        "3.0"		  // Cooldown time before using the ability again
-    "bottonmode"	        "1"		    // ActivationKey  (1 = RightClick. 2 = ReloadButton. 3 = Special)
+    "ragecost"            "0.0"     // Mininum rage cost for using ability (0 = no rage cost)
+    "cooldown"		        "3.0"		  // Cooldown time before using ability again
+    "buttonmode"	        "1"		    // ActivationKey  (1 = RightClick. 2 = ReloadButton. 3 = Special)
+
     "hud_message"	        "%d Ion Cannon Left Press Reload to use"		// Show HUD message when ability is used
     "hud_message_color"	  "0 ; 255 ; 0"	// HUD message color (RGB format)
     "hud_cooldown_color"	"255 ; 0 ; 0"	// HUD cooldown color (RGB format)
+
     "plugin_name"         "ff2r_doslot"
   }
 */
@@ -83,6 +86,7 @@ enum struct ChargeSlotData
   int   charges;
   float nextUse;
   int   slotNumber;
+  float ragecost;
   int   buttonMode;
   char  hudMessage[128];
   int   hudColor[3];
@@ -101,7 +105,7 @@ bool      bHasChargeAbility[MAXPLAYERS + 1];
 float     flOnKillCooldown[MAXPLAYERS + 1];
 
 // HUD
-Handle    hChargeHUD[MAXPLAYERS + 1][3];  // Support up to 3 charge slots per player
+Handle    hChargeHud[MAXPLAYERS + 1][3];  // Support up to 3 charge slots per player
 float     flNextHud[MAXPLAYERS + 1];
 
 public Plugin myinfo =
@@ -109,7 +113,7 @@ public Plugin myinfo =
   name        = "[FF2R] Do Slot",
   author      = "Zell",
   description = "triggers a slot ability after a delay or on kill for a specific class",
-  version     = "1.0.0",
+  version     = "1.0.1",
   url         = ""
 };
 
@@ -129,8 +133,10 @@ public void OnPluginStart()
 
     for (int slot = 0; slot < 3; slot++)
     {
-      hChargeHUD[client][slot] = CreateHudSynchronizer();
+      hChargeHud[client][slot] = CreateHudSynchronizer();
     }
+
+    flNextHud[client] = 0.0;
   }
 }
 
@@ -153,8 +159,10 @@ public void OnPluginEnd()
     // close HUD
     for (int slot = 0; slot < 3; slot++)
     {
-      CloseHandle(hChargeHUD[client][slot]);
+      CloseHandle(hChargeHud[client][slot]);
     }
+
+    flNextHud[client] = 0.0;
   }
 }
 
@@ -195,7 +203,7 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
       }
     }
 
-    // Handle on-kill class slots
+    // handle on-kill class slots
     ability = cfg.GetAbility("kill_class_doslot");
     if (ability.IsMyPlugin())
     {
@@ -231,7 +239,7 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
       flOnKillCooldown[client] = 0.0;
       chargeSlots[client].Clear();
       bHasChargeAbility[client] = false;
-      
+
       SDKUnhook(client, SDKHook_PreThink, DoSlot_Prethink);
       break;
     }
@@ -261,7 +269,8 @@ public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
     ChargeSlotData data;
     data.charges    = cfg.GetInt("amount", 3);
     data.slotNumber = cfg.GetInt("doslot", 20);
-    data.buttonMode = cfg.GetInt("bottonmode", 1);
+    data.ragecost   = cfg.GetFloat("ragecost", 0.0);
+    data.buttonMode = cfg.GetInt("buttonmode", 2);
     data.cooldown   = cfg.GetFloat("cooldown", 3.0);
     data.nextUse    = 0.0;
 
@@ -320,38 +329,97 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
   if (!bHasChargeAbility[client] || !IsValidClient(client) || !IsPlayerAlive(client))
     return Plugin_Continue;
 
+  BossData boss = FF2R_GetBossData(client);
+  if (!boss)
+    return Plugin_Continue;
+
+  // this is for checking charge ability
   if (chargeSlots[client].Length == 0)
   {
     bHasChargeAbility[client] = false;
     return Plugin_Continue;
   }
 
-  ChargeSlotData data;
-  float          currentTime = GetEngineTime();
+  // get current rage
+  float          currentRage = GetBossCharge(boss, "0");
 
+  ChargeSlotData data;
   for (int i = chargeSlots[client].Length - 1; i >= 0; i--)
   {
     chargeSlots[client].GetArray(i, data);
 
-    // skip if on cooldown
-    if (data.nextUse > currentTime)
-      continue;
-
-    // check button press based on button mode
-    bool buttonPressed = false;
-    switch (data.buttonMode)
+    // if charge is all used
+    if (data.charges <= 0)
     {
-      case 1: buttonPressed = (buttons & IN_ATTACK2) != 0;  // Right click
-      case 2: buttonPressed = (buttons & IN_RELOAD) != 0;   // Reload
-      case 3: buttonPressed = (buttons & IN_ATTACK3) != 0;  // Special attack
+      chargeSlots[client].Erase(i);
+      continue;
     }
 
-    if (buttonPressed && data.charges > 0)
+    // get the current time
+    float currentTime = GetEngineTime();
+
+    // update the HUD (this was moved from OnGameFrame() to here)
+    if (currentTime >= flNextHud[client])
     {
-      // Use the ability
+      flNextHud[client] = currentTime + 0.1;
+    }
+    bool isOnCooldown = data.nextUse > currentTime;
+    bool isNoRage     = data.ragecost > currentRage;
+
+    if (data.hudMessage[0] != '\0')
+    {
+      float yPos = 0.21 + (0.03 * i);
+
+      // set color based on whether ability is on cooldown
+      SetHudTextParams(
+        -1.0, yPos, 0.2,
+        isOnCooldown || isNoRage ? data.cooldownColor[0] : data.hudColor[0],
+        isOnCooldown || isNoRage ? data.cooldownColor[1] : data.hudColor[1],
+        isOnCooldown || isNoRage ? data.cooldownColor[2] : data.hudColor[2],
+        255, 0, 0.0, 0.0, 0.0);
+
+      // show cooldown timer if ability is on cooldown
+      if (isOnCooldown)
+      {
+        char format[128];
+        Format(format, sizeof(format), data.hudMessage, data.charges);
+        ShowSyncHudText(client, hChargeHud[client][i], "%s (%.1fs)", format, data.nextUse - currentTime);
+      }
+      // show rage cost if doesnt have enough rage
+      else if (isNoRage)
+      {
+        char format[128];
+        Format(format, sizeof(format), data.hudMessage, data.charges);
+        ShowSyncHudText(client, hChargeHud[client][i], "%s (Required %d RAGE)", format, RoundToNearest(data.ragecost));
+      }
+      else
+      {
+        ShowSyncHudText(client, hChargeHud[client][i], data.hudMessage, data.charges);
+      }
+    }
+
+    // this is for checking button mode
+    if (isOnCooldown)
+      continue;  // skip if ability is on cooldown
+
+    // check button press based on button mode
+    bool button;
+    switch (data.buttonMode)
+    {
+      case 1: button = (buttons & IN_ATTACK2) != 0;  // Right click
+      case 2: button = (buttons & IN_RELOAD) != 0;   // Reload
+      case 3: button = (buttons & IN_ATTACK3) != 0;  // Special attack
+    }
+
+    if (button && data.charges > 0 && !isNoRage)
+    {
+      // use the ability
       FF2R_DoBossSlot(client, data.slotNumber);
 
-      // Update charges and cooldown
+      currentRage -= data.ragecost;
+
+      // update charges cooldown and rage
+      SetBossCharge(boss, "0", currentRage);
       data.charges--;
       data.nextUse = currentTime + data.cooldown;
       chargeSlots[client].SetArray(i, data);
@@ -402,6 +470,22 @@ public Action Event_PlayerDeath(Handle event, const char[] name, bool dontBroadc
   }
 
   return Plugin_Continue;
+}
+
+public float GetBossCharge(ConfigData cfg, const char[] slot)
+{
+  int length    = strlen(slot) + 7;
+  char[] buffer = new char[length];
+  Format(buffer, length, "charge%s", slot);
+  return cfg.GetFloat(buffer);
+}
+
+public void SetBossCharge(ConfigData cfg, const char[] slot, float amount)
+{
+  int length    = strlen(slot) + 7;
+  char[] buffer = new char[length];
+  Format(buffer, length, "charge%s", slot);
+  cfg.SetFloat(buffer, amount);
 }
 
 stock void ParseColorString(const char[] colorStr, int color[3])
@@ -457,60 +541,4 @@ stock bool IsValidClient(int clientIdx, bool replaycheck = true)
     return false;
 
   return true;
-}
-
-public void OnGameFrame()
-{
-  for (int client = 1; client <= MaxClients; client++)
-  {
-    if (!bHasChargeAbility[client] || !IsValidClient(client) || !IsPlayerAlive(client))
-      continue;
-
-    float currentTime = GetEngineTime();
-
-    if (currentTime < flNextHud[client])
-      continue;
-
-    flNextHud[client] = currentTime + 0.1;
-
-    for (int i = chargeSlots[client].Length - 1; i >= 0; i--)
-    {
-      ChargeSlotData data;
-      chargeSlots[client].GetArray(i, data);
-
-      if (data.charges <= 0 && data.nextUse <= currentTime)
-      {
-        chargeSlots[client].Erase(i);
-        continue;
-      }
-
-      float yPos = 0.21 + (0.03 * i);
-
-      if (data.hudMessage[0] != '\0')
-      {
-        // only show HUD if we have charges or are on cooldown
-        if (data.charges > 0)
-        {
-          // set color based on whether ability is on cooldown
-          SetHudTextParams(-1.0, yPos, 0.2,
-                           data.nextUse > currentTime ? data.cooldownColor[0] : data.hudColor[0],
-                           data.nextUse > currentTime ? data.cooldownColor[1] : data.hudColor[1],
-                           data.nextUse > currentTime ? data.cooldownColor[2] : data.hudColor[2],
-                           255, 0, 0.0, 0.0, 0.0);
-
-          // show cooldown timer if ability is on cooldown
-          if (data.nextUse > currentTime && data.charges > 0)
-          {
-            char formattedMessage[128];
-            Format(formattedMessage, sizeof(formattedMessage), data.hudMessage, data.charges);
-            ShowSyncHudText(client, hChargeHUD[client][i], "%s (%.1fs)", formattedMessage, data.nextUse - currentTime);
-          }
-          else if (data.charges > 0)
-          {
-            ShowSyncHudText(client, hChargeHUD[client][i], data.hudMessage, data.charges);
-          }
-        }
-      }
-    }
-  }
 }
