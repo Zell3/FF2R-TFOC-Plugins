@@ -39,7 +39,7 @@ Handle           ModelTimer[MAXPLAYERS + 1];
 public Plugin myinfo =
 {
   name        = "Freak Fortress 2 Rewrite: Rage Model",
-  author      = "J0BL3SS, Zell",
+  author      = "J0BL3SS",
   description = "Subplugin to change boss's model",
   version     = "1.0.1",
 };
