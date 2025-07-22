@@ -36,7 +36,7 @@
 #define PLUGIN_NAME    "Freak Fortress 2 Rewrite: Overlay"
 #define PLUGIN_AUTHOR  "Jery0987, RainBolt Dash, Naydef, Zell"
 #define PLUGIN_DESC    "Ability that covers all living, non-boss team players screens with an image"
-#define PLUGIN_VERSION "2.1.1"
+#define PLUGIN_VERSION "2.1.2"
 
 public Plugin myinfo =
 {
@@ -45,16 +45,6 @@ public Plugin myinfo =
   description = PLUGIN_DESC,
   version     = PLUGIN_VERSION,
 };
-
-Handle g_OverlayTimers[MAXPLAYERS + 1];
-
-public void OnPluginStart()
-{
-  for (int i = 0; i <= MaxClients; i++)
-  {
-    g_OverlayTimers[i] = null;
-  }
-}
 
 public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 {
@@ -74,19 +64,21 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
 
 public void FF2R_OnBossRemoved(int client)
 {
-  // Unhook the event when the boss is removed
   for (int i = 1; i <= MaxClients; i++)
   {
     if (IsValidClient(i))
     {
-      AddOverlay(i, "");  // Remove the screen overlay for all players
+      AddOverlay(i, "");
     }
   }
 }
 
 public void FF2R_OnAbility(int client, const char[] ability, AbilityData cfg)
 {
-  if (!StrContains(ability, "rage_overlay", false) && cfg.IsMyPlugin())
+  if (!cfg.IsMyPlugin())
+    return;
+
+  if (!StrContains(ability, "rage_overlay", false))
   {
     DataPack pack;
     CreateDataTimer(0.0, Timer_StartOverlay, pack, TIMER_FLAG_NO_MAPCHANGE);
@@ -103,32 +95,22 @@ public Action Timer_StartOverlay(Handle hTimer, DataPack pack)
 
   char        path[PLATFORM_MAX_PATH];
   cfg.GetString("path", path, sizeof(path), "");
-  float duration = cfg.GetFloat("duration", 5.0);
-  int   target   = cfg.GetInt("target", 0);
-  float range    = cfg.GetFloat("range", 9999.0);
+  float duration   = cfg.GetFloat("duration", 5.0);
+  int   targetType = cfg.GetInt("target", 3);
+  float range      = cfg.GetFloat("range", 9999.0);
 
   float pos[3], pos2[3];
-
-  // get boss position
   GetClientAbsOrigin(client, pos);
 
   for (int i = 1; i <= MaxClients; i++)
   {
-    if (IsValidClient(i) && IsTarget(client, i, target))
+    if (IsValidClient(i) && IsPlayerAlive(i) && IsTarget(client, i, targetType))
     {
-      // get target position
       GetClientAbsOrigin(i, pos2);
-      // check if target is in range
       if (GetVectorDistance(pos, pos2) < range)
       {
-        if (g_OverlayTimers[i] != null)
-        {
-          KillTimer(g_OverlayTimers[i]);
-          g_OverlayTimers[i] = null;
-        }
-
-        AddOverlay(i, path);  // Add the screen overlay for the target
-        g_OverlayTimers[i] = CreateTimer(duration, Timer_RemoveOverlay, i, TIMER_FLAG_NO_MAPCHANGE);
+        AddOverlay(i, path);
+        CreateTimer(duration, Timer_RemoveOverlay, i, TIMER_FLAG_NO_MAPCHANGE);
       }
     }
   }
@@ -140,9 +122,8 @@ public Action Timer_RemoveOverlay(Handle hTimer, any client)
 {
   if (IsValidClient(client))
   {
-    AddOverlay(client, "");  // Remove the screen overlay for the target
+    AddOverlay(client, "");
   }
-  g_OverlayTimers[client] = null;
   return Plugin_Continue;
 }
 
@@ -151,7 +132,7 @@ public void AddOverlay(int client, const char[] path)
   char overlay[PLATFORM_MAX_PATH];
   Format(overlay, sizeof(overlay), "r_screenoverlay \"%s\"", path);
   SetCommandFlags("r_screenoverlay", GetCommandFlags("r_screenoverlay") & ~FCVAR_CHEAT);
-  ClientCommand(client, overlay);  // Set the screen overlay for the target
+  ClientCommand(client, overlay);
   SetCommandFlags("r_screenoverlay", GetCommandFlags("r_screenoverlay") & FCVAR_CHEAT);
 }
 
