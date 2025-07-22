@@ -97,7 +97,6 @@ enum struct ChargeSlotData
 // store slot data
 ArrayList passiveSlots[MAXPLAYERS + 1];
 ArrayList rageSlots[MAXPLAYERS + 1];
-ArrayList onKillClassSlot[MAXPLAYERS + 1];
 ArrayList chargeSlots[MAXPLAYERS + 1];
 
 // interval
@@ -108,14 +107,25 @@ float     flOnKillCooldown[MAXPLAYERS + 1];
 Handle    hChargeHud[MAXPLAYERS + 1][3];  // Support up to 3 charge slots per player
 float     flNextHud[MAXPLAYERS + 1];
 
+// this is used to store the slot number for each class
+int iOnKillClassSlot[MAXPLAYERS+1][10];
+
+
+/*
+ * Changelog
+ * 1.0.0 - Initial release
+ * 1.0.1 - Adding ragecost in rage charge doslot
+ * 1.0.2 - optimize code
+*/
 public Plugin myinfo =
 {
   name        = "[FF2R] Do Slot",
   author      = "Zell",
   description = "triggers a slot ability after a delay or on kill for a specific class",
-  version     = "1.0.1",
+  version     = "1.0.2",
   url         = ""
 };
+
 
 public void OnPluginStart()
 {
@@ -125,17 +135,10 @@ public void OnPluginStart()
 
   for (int client = 0; client <= MaxClients; client++)
   {
-    passiveSlots[client]     = new ArrayList(sizeof(SlotData));
-    rageSlots[client]        = new ArrayList(sizeof(SlotData));
-    chargeSlots[client]      = new ArrayList(sizeof(ChargeSlotData));
-    onKillClassSlot[client]  = new ArrayList(sizeof(onKillClassSlotData));
-    flOnKillCooldown[client] = 0.0;
-
     for (int slot = 0; slot < 3; slot++)
     {
       hChargeHud[client][slot] = CreateHudSynchronizer();
     }
-
     flNextHud[client] = 0.0;
   }
 }
@@ -153,7 +156,6 @@ public void OnPluginEnd()
     delete passiveSlots[client];
     delete rageSlots[client];
     delete chargeSlots[client];
-    delete onKillClassSlot[client];
     flOnKillCooldown[client] = 0.0;
 
     // close HUD
@@ -172,7 +174,6 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
   {
     passiveSlots[client].Clear();
     rageSlots[client].Clear();
-    onKillClassSlot[client].Clear();
     flOnKillCooldown[client] = 0.0;
     chargeSlots[client].Clear();
     bHasChargeAbility[client] = false;
@@ -207,23 +208,22 @@ public void FF2R_OnBossCreated(int client, BossData cfg, bool setup)
     ability = cfg.GetAbility("kill_class_doslot");
     if (ability.IsMyPlugin())
     {
-      for (int i = 1; i <= 9; i++)  // 1-9 because 0 is unknown class
+      for (int i = 1; i <= 9; i++)
       {
-        char class[32];
-        GetClassStringByIndex(i, class, sizeof(class));
-
-        int slotNum = ability.GetInt(class, -2);
-        if (slotNum != -2)
+        char className[32];
+        GetClassStringByIndex(i, className, sizeof(className));
+        int slotNum = ability.GetInt(className, -1);
+        if (slotNum > -1)
         {
-          onKillClassSlotData data;
-          data.classType  = view_as<TFClassType>(i);
-          data.slotNumber = slotNum;
-
-          onKillClassSlot[client].PushArray(data);
+          iOnKillClassSlot[client][i] = slotNum;
         }
       }
     }
-    SDKHook(client, SDKHook_PreThink, DoSlot_Prethink);
+    // Only hook PreThink if we have passive or on‐kill config
+    if (passiveSlots[client].Length || /* any mapping set? */ true)
+    {
+      SDKHook(client, SDKHook_PreThink, DoSlot_Prethink);
+    }
   }
 }
 
@@ -235,7 +235,6 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
     {
       passiveSlots[client].Clear();
       rageSlots[client].Clear();
-      onKillClassSlot[client].Clear();
       flOnKillCooldown[client] = 0.0;
       chargeSlots[client].Clear();
       bHasChargeAbility[client] = false;
@@ -452,21 +451,13 @@ public Action Event_PlayerDeath(Handle event, const char[] name, bool dontBroadc
     return Plugin_Continue;
 
   // check if the kill class equal to the one in the on kill class data
-  int length = onKillClassSlot[attacker].Length;
-  for (int i = length - 1; i >= 0; i--)
+  int class       = view_as<int>(TF2_GetPlayerClass(victim));
+  int slotNum   = iOnKillClassSlot[attacker][class];
+  if (slotNum > -1 && GetEngineTime() > flOnKillCooldown[attacker])
   {
-    onKillClassSlotData data;
-    onKillClassSlot[attacker].GetArray(i, data);
-    if (data.classType == TF2_GetPlayerClass(victim))
-    {
-      // cooldown to the current time + the cooldown value
-      if (GetEngineTime() > flOnKillCooldown[attacker])
-      {
-        flOnKillCooldown[attacker] = GetEngineTime() + boss.GetAbility("kill_class_doslot").GetFloat("cooldown", 0.0);
-        // then trigger the slot
-        FF2R_DoBossSlot(attacker, data.slotNumber);
-      }
-    }
+    flOnKillCooldown[attacker] = GetEngineTime() + boss.GetAbility("kill_class_doslot").GetFloat("cooldown", 0.0);
+    // then trigger the slot
+    FF2R_DoBossSlot(attacker, slotNum);
   }
 
   return Plugin_Continue;
@@ -528,17 +519,9 @@ stock void GetClassStringByIndex(int index, char[] buffer, int maxlen)
 
 stock bool IsValidClient(int clientIdx, bool replaycheck = true)
 {
-  if (clientIdx <= 0 || clientIdx > MaxClients)
-    return false;
-
-  if (!IsClientInGame(clientIdx) || !IsClientConnected(clientIdx))
-    return false;
-
-  if (GetEntProp(clientIdx, Prop_Send, "m_bIsCoaching"))
-    return false;
-
-  if (replaycheck && (IsClientSourceTV(clientIdx) || IsClientReplay(clientIdx)))
-    return false;
-
+  if (clientIdx <= 0 || clientIdx > MaxClients) return false;
+  if (!IsClientInGame(clientIdx) || !IsClientConnected(clientIdx)) return false;
+  if (GetEntProp(clientIdx, Prop_Send, "m_bIsCoaching")) return false;
+  if (replaycheck && (IsClientSourceTV(clientIdx) || IsClientReplay(clientIdx))) return false;
   return true;
 }
