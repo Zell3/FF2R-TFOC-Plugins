@@ -53,7 +53,7 @@ public Plugin myinfo = {
 	author = "J0BL3SS, Zell",
 	description = "Spooky Spells",
 	version = "2.0.0",
-	url = "www.skyregiontr.com , http://203.159.92.45/donate/"
+	url = "www.skyregiontr.com"
 };
 
 public void OnPluginStart2() {

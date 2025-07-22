@@ -1,4 +1,4 @@
-/*
+/* this is so many bug ahhh i dont know sob
 
 // in case you want to make duo or trio boss, only one of them can have this ability
 "special_revivemarker"

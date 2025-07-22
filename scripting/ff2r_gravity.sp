@@ -1,4 +1,4 @@
-/*
+/* iirc shockwave make server crash
   "rage_gravity" // Ability name can use suffixes
   {
     "slot"            "0"
@@ -88,7 +88,7 @@ int              SIG_iParticle[MAXPLAYERS + 1];           // Internal
 public Plugin myinfo =
 {
   name        = "Freak Fortress 2 Rewrite: Gravity",
-  author      = "J0BL3SS, Zell (i just make it use ff2r stock)",
+  author      = "J0BL3SS",
   description = "Break the laws of quantum and create gravitational fields and shockwaves",
   version     = "1.4.0",
   url         = "www.skyregiontr.com",
